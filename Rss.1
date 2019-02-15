@@ -1,0 +1,322 @@
+.TH Rss 1 2019 1.19
+.SH NAME
+Rss - Reports/Restore shell script
+.SH SYNOPSIS
+.B Rss
+.I [-U use] [-R rcpt]
+.B -s path
+.I [subject]
+.br
+.B Rss
+.I [-U use] [-D date] [-R path] [-n]
+.B \-b path
+.I [path ...]
+.br
+.B Rss
+.I [-U use] [-D date] [-R root] [-n]
+.B -{rtx} pattern
+.I [pattern ...]
+.br
+.B Rss
+.I [-U use] [-D date] [-n]
+.B -{aceil} pattern
+.I [pattern ...]
+.br
+.B Rss
+.I [-U use] [-D date]
+.B -o path
+.SH DESCRIPTION
+The
+.B Rss
+shell script is designed to simplify writing output analyzers of program
+executing results, to check for changes to regular files, to check
+the immutability of symbolic links and the presence of directories
+(including changing access rights to specified objects), and also to restore
+saved objects.
+
+In the first form,
+.B Rss
+organizes the execution of one executable shell script
+(sequences of those from the specified directory) with the reports on
+the results of work and sending it to the standard output or using
+the mail service.
+If the scripts are written taking into account the work under the control of
+.BR Rss ,
+then additional processing capabilities can be used.
+
+In the second form,
+.B Rss
+saves the attributes and contents of the modified files, as well as directories
+and symbolic links as database objects for later recovery.
+
+In the third form,
+.B Rss
+recovers saved files, symbolic links or directories.
+
+In the fourth form,
+.B Rss
+performs operations with a database objects.
+
+In the fifth form,
+.B Rss
+output the contents of the latest version of the specified file to \fISTDOUT\fR.
+.SH OPTIONS
+.TP
+.B -a
+Show all versions of objects with minimum information
+.TP
+.B -b
+Backup the objects
+.TP
+.B -c
+Show changed objects since
+.B DATE
+.TP
+.B -D DATE
+Use
+.B DATE
+as timestamp (default:
+.IR now )
+.TP
+.B -e
+Erase objects except last
+.TP
+.B -h
+Display this text
+.TP
+.B -i
+Show full information about live objects
+.TP
+.B -l
+List of live objects
+.TP
+.B -n
+Invert condition, skip file contents during backup
+.TP
+.B -o
+Output file content to
+.I STDOUT
+.TP
+.B -R PATH
+Backup the object as
+.B PATH
+.TP
+.B -R RCPT
+Recipient for mail reports (default:
+.IR $LOGNAME )
+.TP
+.B -R ROOT
+Restore to directory
+.B ROOT
+.TP
+.B -r
+Restoration of changed objects with confirmation request
+.TP
+.B -s
+Execute shell script or a set of shell scripts from a directory
+.TP
+.B -t
+Objects recovery check
+.TP
+.B -U USE
+Database for use (default:
+.IR $HOME/.Rss )
+.TP
+.B -x
+Restore file revisions with the save date as extensions
+.TP
+Parameters:
+.TP
+.I path
+.br
+name of file, symbolic link or directory
+.TP
+.I pattern
+shell pattern or name of file, symbolic link or directory
+.TP
+.I subject
+topic for the report by mail
+.TP
+Notes:
+.br
+if no action is specified, then the entire command line will be output to
+.I STDOUT
+.SH USAGE
+To implement the features listed above,
+.BR Rss ,
+in report mode, executes the corresponding sets of scripts as its code
+in the subshell, having previously defined the function
+.BR Rss .
+
+The specified function allows you to split the execution of shell scripts
+into separate stages while preserving the output of each in
+.I STDOUT
+and
+.I STDERR
+in a temporary log file for further analysis.
+
+When describing a stage, explanatory text may be indicated, as well as the name of the file or directory and its processing parameters.
+
+The beginning of a shell script implicitly determines the beginning of a stage.
+
+Internal function for reports mode:
+
+.B Rss
+.I [path [[-|+ part] [@ edit]] [= diff] [text]]
+.TP
+.I path
+.br
+Absolute path for testing or relative name to save the output of the
+following commands, except the name '\fI-\fR'. If absolute path ends with
+.I /
+- will be tested all hierarchy
+.TP
+.IR -\ part *
+Pattern to exclude from testing
+.TP
+.IR +\ part *
+Pattern to include in testing
+.TP
+.IR @\ edit **
+Command to convert the source file to
+.I STDOUT
+.TP
+.I = diff
+.br
+Non default command to output differences between stored and current
+version the file (default: \fI/usr/bin/diff -ut\fR)
+.TP
+.I text
+.br
+Comment for report
+.TP
+Notes:
+.br
+if edit is '\fIfalse\fR', the contents of the file are not saved
+.br
+if diff is '\fIfalse\fR', the file are saved without differences checking
+.br
+*  - for hierarchy testing
+.br
+** - for absolute path
+.PP
+Each stage is analyzed for the completion code and the availability of
+output to
+.I STDOUT
+or
+.IR STDERR .
+
+For a non-zero stage completion code, a report is generated with the output
+the contents of the log file.
+
+If the stage ended with a zero completion code and there is no file name in its
+parameters, the report is generated only if there was any output to the
+log file.
+
+When specifying the name of a regular file, the contents of the saved file
+will be compared with the file obtained during the execution of the stage.
+
+If the comparison did not find differences, the report is not generated.
+Otherwise, the differences will be included in the report, and the new
+version of the file will be saved.
+
+Information about objects is stored in a
+.IR SQLite\ version\ 3
+database, the last file contents are stored as compressed
+.IR xz ,
+previous as binary difference 
+.I xdelta3
+followed.
+.SH EXAMPLES
+.B 1.
+Run the script \fI./check\fR, send reports on its work by mail to the address
+\fIadmin@domain.tld\fR with the subject "\fITest\fR":
+
+ $ Rss -R admin@domain.tld -s ./check Test
+
+.B 2.
+Show full information about all saved objects:
+
+ $ Rss -i "*"
+
+.B 3.
+Objects recovery for template \fI/etc/*\fR to the \fIrestore\fR directory:
+
+ $ Rss -R restore -rn "/etc/*"
+
+.B 4.
+Sample shell script for common admin tasks using \fBRss\fR:
+
+ #!/bin/sh
+ # 1. Log file analysis
+ Rss - Messages in /var/log/messages for yesterday
+   sed "/^$(TZ=UTC+24 /bin/date '+%b %e')/!d" /var/log/messages
+ # 2. Comparison of the current state of the system with the previous
+ Rss tmp/ifconfig = 'diff -t' Changes in network interface settings
+   ifconfig -a
+ # 3. File verification, backup if changed
+ Rss /etc/hosts = "diff -U0"
+ Rss /etc/localtime Check timezone
+ Rss /etc/ssh/ - moduli
+ Rss /etc/ssh/ + moduli @ false
+   cmp_shadow() {
+     /usr/bin/diff -U0 "$1" "$2" |
+       /bin/sed 's/^\\(\.[^:\ ]*:\\)[^:]*/\1(password)/;$q 1'
+   }
+ Rss /etc/shadow = cmp_shadow
+ # 4. Final operations
+
+Execution (run as in example 1):
+
+1.\ If \fIsed\fR output is not empty, it is included in the report,
+with the specified header. Otherwise, the report is not generated.
+
+2.\ If, when comparing the saved with the curren output of \fIifconfig -a\fR,
+\fIdiff -t\fR does not return 0, then result of the comparison with the
+specified header is include in the report, and the output save in
+\fItmp/ifconfig\fR file in the storage database.
+Otherwise, the report is not generated.
+
+3.\ Regular files check for differences regarding backup copies of
+in the storage database and not empty comparison results to display
+individual reports. If the title text is not specified, use the default one.
+Modified files save. Wherein:
+.RE
+-\ file \fI/etc/hosts\fR check for changes regarding saved with \fIdiff -U0\fR;
+.RE
+-\ recursively bypass the \fI/etc/ssh\fR directory hierarchy and check for
+changes. For regular files falling under the \fImoduli\fR template, do not
+save content;
+.RE
+-\ checking the \fI/etc/shadow\fR file on changes using the function
+\fIcmp_shadow\fR.
+
+4.\ Create a report if there are changed objects in the storage database.
+
+.SH EXIT STATUS
+.B 0
+- successful completion.
+.br
+.B 1
+- error termination.
+.SH ENVIRONMENT
+.TP
+.B HOME
+user's home directory.
+.TP
+.B TMPDIR
+directory for temporary data created at runtime.
+.SH FILES
+.TP
+.I $HOME/.Rss
+default storage database.
+.SH SEE ALSO
+.BR sqlite3 (1),
+.BR xdelta3 (1),
+.BR xz (1).
+.SH REPORTING BUGS
+Report any errors to the author below.
+.SH AUTHOR
+Roman Oreshnikov <r.oreshnikov@gmail.com>.
+.SH COPYRIGHT
+Copyright 2007-2019 by Roman Oreshnikov

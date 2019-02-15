@@ -1,0 +1,131 @@
+#!/bin/sh
+#
+# /etc/Check: Rss host checking
+#
+DATE=$(/bin/date "+%d%w")
+#
+# Daily jobs
+#
+Rss - Mail in local queue
+/usr/sbin/sendmail -bp | /bin/sed '1N;2N'
+#
+Rss - Checking system reboot
+D=$(TZ=UTC+24 /bin/date '+%a %b %e [^ ]* %Y')
+/usr/bin/last -F reboot | /bin/sed "/ $D /!d"
+#
+Rss tmp/ip_addr.out "Changes in 'ip addr show' output"
+/sbin/ip addr show
+#
+Rss tmp/ip_route.out "Changes in 'ip route show' output"
+/sbin/ip route show
+#
+Rss tmp/root.crontab "Changes in root's crontab"
+/usr/bin/crontab -l -u root
+#
+Rss - Checking bad login attempts
+D=$(TZ=UTC+24 /bin/date '+%a %b %e [^ ]* %Y')
+/usr/bin/lastb -F | /bin/sed "/ $D /!d"
+#
+Rss - Checking failure log
+/usr/bin/faillog -t 1
+#
+Rss - Checking for uids of 0
+/usr/bin/awk -F: '/^[^#+-]/ { if($3 == 0 && $1 != "root") print $1 }' \
+  /etc/passwd
+#
+Rss tmp/accounts.out Changes in accounts status information
+/usr/bin/passwd -aS | /usr/bin/sort
+#
+Rss - Verifying the integrity of the users and authentication information
+/usr/sbin/pwck -r
+#
+Rss - Verifying the integrity of the groups information
+/usr/sbin/grpck -r
+#
+Rss tmp/mailboxes.out Changes in active mailboxes
+/usr/bin/awk -F: '
+  /^[a-z]/ { if($1 in a) next; a[$1]=FILENAME; }
+  END { for(e in a) { if(a[e] == FILENAME) { print e; } } }
+' /etc/exim/aliases /etc/passwd | /usr/bin/sort
+#
+Rss tmp/mount.out Changes in mounted filesystems
+/bin/mount
+#
+Rss - Check filesystems capacity
+/bin/df -kh | /bin/sed -n '1h;/ 1[0-9][0-9]% /H;/ 9[0-9]% /H;$x;/\n/p'
+#
+Rss tmp/setuid.out = "/usr/bin/diff -U0" Changes in setuid/setgid files
+/usr/bin/find $(/bin/mount |
+  /usr/bin/awk '$5 ~ /^ext/ && $6 !~ /nosuid/ { print $3 }') \
+    -mount -type f \( -perm -u+s -o -perm -g+s \) |
+      /usr/bin/xargs /bin/ls -lbdq --time-style=full-iso
+#
+Rss - Security messages
+LOG=/var/log/authlog.0
+if [ -f "$LOG" ]; then
+  D=$(TZ=UTC+24 /bin/date '+%b %e')
+  /bin/sed "/^$D .* FAIL/!d" $LOG
+else
+  echo "$LOG is missing"
+fi
+#
+Rss - Rejected mail hosts
+LOG=/var/log/maillog.0
+if [ -f "$LOG" ]; then
+  D=$(TZ=UTC+24 /bin/date '+%b %e')
+  /bin/sed -n "s/^$D .* H=\([^ ]*\) .* rejected .*$/\1/p" $LOG |
+    /usr/bin/sort -f | /usr/bin/uniq -c | /usr/bin/sort -fnr
+else
+  echo "$LOG is missing"
+fi
+#
+# Weekly jobs
+#
+case $DATE in *0)
+#
+Rss - "Search 'core' files"
+/usr/bin/find $(/bin/mount |
+  /usr/bin/awk '$5 ~ /^ext/ { print $3 }') -mount -type f -name core
+#
+Rss - Files with an unknown user or group
+/usr/bin/find $(/bin/mount |
+  /usr/bin/awk '$5 ~ /^ext/ { print $3 }') -mount -nogroup -o -nouser
+#
+Rss tmp/pkginfo.out Changes in installed packages
+/usr/bin/pkginfo -i
+#
+Rss - "Check rejected files by pkgadd(8)"
+[ ! -d /var/lib/pkg/rejected ] || /usr/bin/find /var/lib/pkg/rejected -type f
+#
+esac
+#
+# Monthly jobs
+#
+case $DATE in 01*)
+#
+esac
+#
+# Backup
+#
+DiffShadow() {
+/usr/bin/diff -U0 "$1" "$2" | /bin/sed 's/^\(.[^: ]*:\)[^:]*/\1(password)/;$q 1'
+}
+Rss /etc/ - "*-" - "*/*" - adjtime @ false
+Rss /etc/Check
+Rss /etc/cron.d/ @ false
+Rss /etc/exim/
+Rss /etc/fstab
+Rss /etc/group
+Rss /etc/hosts
+Rss /etc/inetd.conf
+Rss /etc/lilo.conf
+Rss /etc/ntp.conf
+Rss /etc/passwd
+Rss /etc/rc.conf
+Rss /etc/rc.d/ @ false
+Rss /etc/resolv.conf
+Rss /etc/shadow = DiffShadow
+Rss /etc/ssh/ - moduli
+Rss /etc/ssh/moduli @ false
+Rss /etc/sudoers
+Rss /etc/syslog.conf

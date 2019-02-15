@@ -1,0 +1,461 @@
+#!/bin/sh
+RSSH="Reports/Restore shell script
+
+	@(#) Rss V1.19 (C) 2007-2019 by Roman Oreshnikov
+
+This is free software, and comes with ABSOLUTELY NO WARRANTY
+
+Usage: Rss [-U use] [-R rcpt] -s path [subject]
+  or   Rss [-U use] [-D date] [-R path] [-n] -b path [path ...]
+  or   Rss [-U use] [-D date] [-R root] [-n] -{rtx} pattern [pattern ...]
+  or   Rss [-U use] [-D date] [-n] -{aceil} pattern [pattern ...]
+  or   Rss [-U use] [-D date] -o path
+
+Options:
+  -a       Show all versions of objects with minimum information
+  -b       Backup the objects
+  -c       Show changed objects since DATE
+  -D DATE  Use DATE as timestamp (default: now)
+  -e       Erase objects except last
+  -h       Display this text
+  -i       Show full information about live objects
+  -l       List of live objects
+  -n       Invert condition, skip file contents during backup
+  -o       Output file content to STDOUT
+  -R PATH  Backup the object as PATH
+  -R RCPT  Recipient for mail reports (default: \$LOGNAME)
+  -R ROOT  Restore to directory ROOT (default: .)
+  -r       Restoration of changed objects with confirmation request
+  -s       Execute shell script or a set of shell scripts from a directory
+  -t       Objects recovery check
+  -U USE   Database for use (default: \$HOME/.Rss)
+  -x       Restore file revisions with the save date as extensions
+
+Internal function for reports mode:
+Rss [path [[-|+ part] [@ edit]] [= diff] [text]]
+  path     Absolute path for testing or relative name to save the output of the
+             following commands, except the name '-'. If absolute path ends
+             with / - will be tested all hierarchy
+  - part*  Pattern to exclude from testing
+  + part*  Pattern to include in testing
+  @ edit** Command to convert the source file to STDOUT
+  = diff   Non default command to output differences between stored and current
+             version the file (default: /usr/bin/diff -ut)
+  text     Comment for report
+Notes:
+  if edit is 'false', the contents of the file are not saved
+  if diff is 'false', the file are saved without differences checking
+  *  - for hierarchy testing
+  ** - for absolute path
+
+Report bugs to <r.oreshnikov@gmail.com>"
+RSSA=	# Action
+RSSD=	# TimeStamp
+RSSN=	# Key
+RSSR=	# Recipient or path
+RSSU=	# DataBase
+Wrn() { echo "Rss: $*" >&2; }
+Err() { Wrn "$*"; exit 1; }
+Rss() {
+	[ -z "$1" ] || Err "Option -$RSS already set"
+	case ${2:-/}$OPTARG/ in
+	-*|$2//);;
+	/-*|*[\	\ ]*|/*//*) Err "Illegal value for option -$RSS"
+	esac
+}
+while getopts D:R:U:abcehilnorstx RSS; do
+	case $RSS in
+	D)	Rss "$RSSD" -; RSSD=$OPTARG
+		case $RSSD in ''|*[!0-9]*);; *) RSSD=@$RSSD;; esac
+		RSSD=$(/bin/date --date="$RSSD" +%s 2>/dev/null) ||
+			Err "Invalid timestamp $OPTARG";;
+	R)	Rss "$RSSR" /; RSSR=$OPTARG;;
+	U)	Rss "$RSSU"; RSSU=$OPTARG;;
+	[abceilorstx])	[ -z "$RSSA" ] || Err "Action already set as -$RSSA"
+		RSSA=$RSS;;
+	n)	RSSN=n;;
+	h)	echo "$RSSH"; exit;;
+	?)	echo "Try 'Rss -h' for more information" >&2; exit 1
+	esac
+done
+[ -z "$RSSA" ] && echo "Rss $@" && exit
+shift $(expr $OPTIND - 1)
+[ $# = 0 ] && Err "Argument is required"
+[ -n "$RSSU" ] || RSSU=$HOME/.Rss
+trap "Err Terminated by signal" 1 2 3 13 15
+umask 066
+#
+# Report
+#
+Rss() {
+	RSSE=$? RSS=
+	while [ $RSSE = 0 -a -n "$RSSN" ]; do	# Processing the path
+		if [ -n "${RSSN##/*}" ]; then RSS=$RSST/1; RSSP=
+		elif [ -s "$RSST/1" ]; then break
+		elif [ "x$RSSP" = xfalse -o ! -f "$RSSN" -o -L "$RSSN" ]; then
+			echo "$RSSN" >>"$RSST/5"; break
+		elif [ -r "$RSSN" ]; then RSS=$RSSN
+		else Wrn "Failed to access $RSSN"; break
+		fi
+		exec >"$RSST/2" 2>&1
+		if [ "x$RSSA" != xfalse ]; then
+			$0 -U "$RSSU" -o "$RSSN" >"$RSST/3" || break
+			if [ -z "$RSSP" ]; then RSSP=$RSST/3
+			else	# Edit the files
+				$RSSP "$RSST/3" >"$RSST/1" &&
+					$RSSP "$RSSN" >"$RSST/3"
+				case $? in
+				[!0]*) Wrn "The edit exit code: $?"; break
+				esac
+				RSSP=$RSST/1 RSS=$RSST/3
+			fi
+			# Compare the resulting file with a saved one
+			${RSSA:-/usr/bin/diff -ut} "$RSSP" "$RSS"
+			case $? in
+			0)	[ -z "${RSSN##/*}" ] || break;;
+			1);;
+			*)	Wrn "The comparison exit code: $?"; break
+			esac
+			[ -z "${RSSN##/*}" ] && RSS=$RSSN; RSSP=
+		fi
+		# Save object
+		$0 -U "$RSSU" -R "$RSSN" -b "$RSS"
+		break
+	done
+	[ -z "$RSS" ] && RSS=$RSST/1 || RSS=$RSST/2
+	# Send previous stage report
+	if [ $RSSE != 0 -o -s "$RSS" ]; then
+		[ ! -s "$RSST/0" -a -n "$RSSH" ] && {
+			echo "$RSSH$RSSM"; /bin/cat "$RSS"
+			} | /usr/sbin/sendmail -t >"$RSST/0" 2>&1 || {
+			[ -z "$RSSM" ] || echo "$RSSM"; /bin/cat "$RSS"; echo
+			} >>"$RSST/0"
+	fi
+	# New stage
+	exec >"$RSST/1" 2>&1
+	RSSN= RSSM="### Rss $*:"
+	case /$1/ in
+	//)	[ $# != 0 ] || RSSM=;;
+	/-/)	shift; [ $# = 0 ] && RSSM= || RSSM="### $*:";;
+	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\\\ \	]*|/[!/]*//)
+		Wrn "Invalid object name $1";;
+	*//)	RSSP=$1 RSSA= RSSE= RSS=
+		while shift; do # Get patterns
+			case $1 in [+-]);; *) break;; esac
+			if [ "x${RSS:-$1}" != x$1 ]; then
+				Wrn "Incompatible patterns"; return
+			elif [ -z "$2" ]; then
+				Wrn "Missing pattern for $1"; return
+			fi
+			RSS=$1 RSSA="$RSSA $RSSP$2"; shift
+		done
+		if [ -n "$RSSA" ]; then
+			case $RSS in -) RSS='d;';; *) RSS='p;'; RSSE=-n;; esac
+			RSSA=$(echo "$RSSA" | /bin/sed 's%//[/]*%/%g
+				s%\([$/.]\)%\\\1%g;s%\[!%[^%g;s%?%.%g;s%*%.*%g
+				s% \([^ ]*\)%/^\1$/'$RSS'/^\1\\//'$RSS'%g')
+		fi
+		{ $0 -U "$RSSU" -l "$RSSP*" && /usr/bin/find "$RSSP"
+		} >"$RSST/2" || return
+		/bin/sed $RSSE "s%/$%%;$RSSA" "$RSST/2" |
+			LANG=C /usr/bin/sort -u >"$RSST/4"
+		exec <"$RSST/4"
+		while read RSS; do Rss "$RSS" "$@"; done;;
+	*)	RSSP= RSSA= RSSN=$1
+		while shift; do # Get parameters
+			case $1 in @) RSSP=$2;; =) RSSA=$2;; *) break;; esac
+			case $(type ${2%% *}) in
+			${2%% *}" is "[/.]*|${2%% *}" is a s"*) shift; continue
+			esac
+			RSSN= RSS=${2:+Illegal}
+			Wrn "${RSS:-Missing} value for $1"; return
+		done
+		[ $# = 0 ] && RSSM="### Changes in $RSSN:" || RSSM="### $*:"
+	esac
+}
+if [ $RSSA = s ]; then
+	RSSS=$1; shift; RSSM="$*"
+	if [ -d "$RSSS" ]; then set -- "$RSSS"/*
+	elif [ ! -f "$RSSS" ]; then Err "Missing file $RSSS"
+	elif [ ! -x "$RSSS" ]; then Err "Not executable file $RSSS"
+	else set -- "$RSSS"
+	fi
+	RSST=$(/usr/bin/mktemp -dq) || Err "Can't create temporary directory"
+	trap "/bin/rm -rf $RSST" 0
+	RSSD=$(/bin/date)
+	[ -z "$RSSR$RSSM" ] && RSSH= || RSSR=${RSSR:-$LOGNAME} RSSH="To: $RSSR
+Subject: ${RSSM:-Rss report of run $RSSS}
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: inline
+Content-Transfer-Encoding: 8bit
+"
+	readonly RSSD RSSH RSST RSSU Rss Wrn
+	RSSM= RSSN=
+	for RSSS do
+		[ -f "$RSSS" -a -x "$RSSS" ] &&
+		(
+		trap Rss 0
+		Rss - "Run $RSSS"
+		[ -r "$RSSS" ] || Err "Failed to access $RSSS"
+		case $RSSS in */*);; *) RSSS=./$RSSS;; esac
+		. "$RSSS"
+		)
+	done
+	(
+	trap Rss 0
+	Rss - Changed objects
+	[ -s "$RSST/5" ] &&
+		$0 -U "$RSSU" -nb $(LANG=C /usr/bin/sort -u "$RSST/5")
+	[ ! -r "$RSSU" ] || $0 -U "$RSSU" -D "$RSSD" -c \*
+	)
+	if [ -s "$RSST/0" ]; then
+		[ -z "$RSSR" ] || Wrn "Can't send mail to $RSSR"
+		/bin/cat "$RSST/0"
+	fi
+	exit
+fi
+#
+# Restore
+#
+SQL="CREATE TABLE IF NOT EXISTS db (
+	d INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	t TEXT NOT NULL,
+	p TEXT NOT NULL,
+	i TEXT,
+	b TEXT);
+"
+Sql() {
+	/usr/bin/sqlite3 -separator ' ' "$RSSU" "$SQL$*" 2>/dev/null ||
+		Err "SQLite3 database access error"
+}
+Rss() {
+	case /$1/ in
+	*//|/*//*/|/-*|*/./*|*/../*|*[\'\\\ \	]*);;
+	*[*?\[\]]*) [ $# = 2 ] && return;;
+	*) return
+	esac
+	Err "Invalid ${2:-path} $1"
+}
+Inf() { /usr/bin/stat -c '%a %U:%G' "$1" 2>/dev/null; }
+Md5() { /usr/bin/md5sum "$1" 2>/dev/null | /bin/sed 's/ .*//'; }
+Dir() {
+	case $1$RSSR in
+	'') RSSR=.;;
+	/) RSSR=;;
+	//) Err "Illegal value for option -R"
+	esac
+}
+Src() { echo "$1" | { /usr/bin/base64 -d | /usr/bin/xz -dc; } 2>/dev/null; }
+Pop() {
+	echo "$1" | { /usr/bin/base64 -d | /usr/bin/xdelta3 -dcs "$2" >"$2~" &&
+	/bin/mv "$2~" "$2"; } 2>/dev/null
+}
+Get() {
+	B=$(Sql "SELECT b FROM db WHERE p='$1' AND d>=datetime($2,'unixepoch')
+		AND b NOTNULL ORDER BY rowid DESC") || exit
+	for B in $B; do
+		case $B in
+		/*)	Src "$B" >"$3";;
+		*)	Pop "$B" "$3"
+		esac || Err "Failed to extract $1"
+	done
+	[ $# = 3 ] || /bin/touch -d "@$2" "$3"
+}
+Tmp() {
+	[ -n "$W" ] && return
+	W=$(/usr/bin/mktemp -q) || Err "Can't create temporary file"
+	trap "/bin/rm -f $W $W~" 0
+}
+case $RSSA in
+[bo])	[ $# != 1 -a \( -n "$RSSR" -o $RSSA = o \) ] &&
+		Err "Only one argument is required";;
+*)	RSS=; for P do Rss "$P" pattern; RSS="${RSS:+$RSS OR }p GLOB '$P'"; done
+	[ -z "$RSSD" -o $RSSA = c -o $RSSA = x ] ||
+		RSS="($RSS) AND d<=datetime($RSSD,'unixepoch')"
+esac
+case $RSSA in
+a)	[ -z "$RSSN" ] && T="t,p" || T="t,p,i"
+	Sql "SELECT datetime(d,'localtime'),$T FROM db WHERE $RSS ORDER BY p";;
+b)	Dir /
+	[ -n "$RSSD" ] || D="datetime('now')"
+	for N do
+		[ -n "$RSSR" ] && P=$RSSR || P=$N; Rss "$P"
+		B=$(Sql "SELECT t,rowid,strftime('%s',d),i,b FROM db
+			WHERE p='$P' ORDER BY rowid DESC LIMIT 1") || exit
+		set -- $B
+		T=@ I=NULL B=NULL U= SQL=
+		if F=$(Inf "$N"); then
+			if [ -L "$N" ]; then T=l I=\'$F\ $(/bin/readlink "$N")\'
+			elif [ -d "$N" ]; then T=d I=\'$F\'
+			elif [ -f "$N" ]; then
+				[ -r "$N" ] || Err "Failed to access $N"
+				T=- I=\'$F\ $(Md5 "$N")\'
+			fi
+		fi
+		case $T$1 in
+		@*)	[ -z "$4" ] && continue; T=$1;;
+		dd)	[ "$I" = "'$4 $5'" ] && continue;;
+		ll)	[ "$I" = "'$4 $5 $6'" ] && continue;;
+		-*)	case $I$1 in "'$4 $5 $6'"[=-]) continue;; esac
+			[ -z "$RSSN" ] && B= || T==
+		esac
+		if [ -n "$RSSD" ]; then
+			[ -z "$3" ] && D=$RSSD || D="MAX($RSSD,$3)"
+			D="datetime(MIN(strftime('%s','now'),$D),'unixepoch')"
+		fi
+		if [ -n "$B" ]; then
+			Sql "INSERT INTO db VALUES($D,'$T','$P',$I,$B)"
+			continue
+		fi
+		Tmp
+		if [ "x$1" = "x-" -a -n "$4" ]; then
+			[ "'${I##* }" = "'$6'" ] && U=NULL B=\'$7\' ||
+				U=\'$(Src "$7" >"$W" && {
+					/usr/bin/xdelta3 -s "$N" <"$W" |
+					/usr/bin/base64 -w0; } 2>/dev/null
+				)\' || Err "Failed to extract $P"
+			U="UPDATE db SET b=$U WHERE rowid=$2;"
+		fi
+		[ -n "$B" ] || B=\'$(/usr/bin/xz -c "$N" |
+			/usr/bin/base64 -w0)\' || exit
+		echo "$U INSERT INTO db VALUES($D,'$T','$P',$I,$B)" >"$W"
+		Sql ".read $W"
+	done;;
+c)	[ -z "$RSSN" ] && I=">=" || I="<"
+	[ -z "$RSSD" ] && D="'now'" || D="$RSSD,'unixepoch'"
+	Sql "SELECT p,t,i FROM db WHERE d $I datetime($D) AND
+	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
+e)	if [ -z "$RSSN" ]; then
+		Sql "DELETE FROM db WHERE $RSS AND rowid NOT IN
+		(SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p);
+		DELETE FROM db WHERE $RSS AND i ISNULL; VACUUM"
+	else
+		Sql "DELETE FROM db WHERE $RSS; DELETE FROM db WHERE rowid IN
+		(SELECT MIN(rowid) FROM db GROUP BY p) AND i ISNULL; VACUUM"
+	fi;;
+i)	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
+	Sql "SELECT datetime(d,'localtime'),t,p,i FROM db WHERE i $I AND
+	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
+l)	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
+	Sql "SELECT p FROM db WHERE i $I AND
+	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
+o)	Rss "$1"
+	if [ -z "$RSSD" ]; then
+		B=$(Sql "SELECT b FROM db WHERE p='$1'
+			ORDER BY rowid DESC LIMIT 1") || exit
+		[ -z "$B" ] || Src "$B" || Err "Failed to extract $1"
+	else
+		D=$(Sql "SELECT strftime('%s',d) FROM db WHERE p='$1' AND
+			d<=datetime($RSSD,'unixepoch')
+			ORDER BY rowid DESC LIMIT 1") || exit
+		[ -z "$D" ] || { SQL=; Tmp; Get "$1" $D "$W"; /bin/cat "$W"; }
+	fi;;
+x)	Dir
+	if [ -n "$RSSN" ]; then
+		[ -z "$RSSD" ] && exit
+		RSS="($RSS) AND d>datetime($RSSD,'unixepoch')"; RSSD=
+	fi
+	{ Sql "SELECT b,p,strftime('%s',d),i FROM db WHERE $RSS AND
+		t='-' AND b NOTNULL ORDER BY p,rowid DESC" || echo @
+	} | { SQL=
+	while read B P D M O I; do
+		[ -n "$P" ] && Tmp || exit
+		case $B in
+		/*)	Src "$B" >"$W";;
+		*)	Pop "$B" "$W"
+		esac || Err "Failed to extract $P"
+		[ -z "$RSSD" -o "0$RSSD" -ge "$D" ] || continue
+		P=$RSSR/${P#/}.$(/bin/date --date="@$D" +%Y-%m-%d-%H-%M-%S)
+		/usr/bin/install -Dp -m "$M" -o "${O%:*}" -g "${O#*:}" \
+			--backup=numbered "$W" "$P" 2>/dev/null ||
+				Err "Failed create $P"
+	done
+	};;
+*)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
+	SQL=
+	Dir
+	for P in $P; do
+		Rss "$P"
+		set -- $(Sql "SELECT t,strftime('%s',d),i FROM db WHERE p='$P'
+			${RSSD:+AND d<=datetime($RSSD,'unixepoch')}
+			ORDER BY rowid DESC LIMIT 1")
+		[ -n "$1" ] || exit
+		[ -n "$3" ] || continue
+		E= N=$RSSR/${P#/} T=
+		while I=$(Inf "$N"); do
+			M=${I% *} C=${I#* }
+			if [ -L "$N" ]; then T=l
+			elif [ -d "$N" ]; then T=d
+			elif [ -f "$N" ]; then
+				[ -r "$N" ] && T=- || Err "Failed to access $N"
+			fi
+			case $1$T in
+			[=-]-)	I=$(Md5 "$N"); [ "x$5" = "x$I" ] && I= || E=1;;
+			dd)	I=;;
+			ll)	I=$(/bin/readlink "$N")
+				[ "x$5" = "x$I" ] && I= || E=2;;
+			*)	E=3; break
+			esac
+			[ "x$3" = "x$M" ] && M=
+			[ "x$4" = "x$C" ] && C=
+			[ -z "$E$M$C" ] && continue 2
+			E=${E:-0}
+			break
+		done
+		case $1 in
+		-|=)	T="regular file";;
+		d)	T="directory";;
+		l)	T="symbolic link";;
+		*)	Err "Data error for $P"
+		esac
+		if [ $RSSA = t ]; then
+			case $RSSN$E in
+			n*) echo "$N"; continue;;
+			'') echo "$N: $T is missing"; continue;;
+			1) echo "$N: the contents of the $T is changed";;
+			2) echo "$N: $T target changed from $5 to $I";;
+			3) echo "$N: is not a $T"; continue
+			esac
+			[ -z "$M" ] || echo "$N: $T mode changed from $3 to $M"
+			[ -z "$C" ] ||
+				echo "$N: ownership of $T changed from $4 to $C"
+			continue
+		elif [ "x$E" = x0 ]; then
+			T="Restore access permissions for $T $N"
+		elif [ "x$1" = x= ]; then
+			Wrn "Can't restore $T $N. Content not saved"; continue
+		else
+			I=y T="Restore $T $N"
+		fi
+		if [ -z "$RSSN" ]; then
+			read -p "Rss: $T? " T
+			case $T in [yY]);; *) continue;; esac
+		fi
+		[ -n "$E" ] || /bin/mkdir -p "${N%/*}" 2>/dev/null ||
+			Err "Can't create directory ${N%/*}"
+		if [ -n "$I" ]; then
+			M=y C=y
+			case $1 in
+			d)	I=$(/usr/bin/mktemp -dq "$N.XXXXXX");;
+			[l-])	I=$(/usr/bin/mktemp -q "$N.XXXXXX")
+			esac || Err "Can't write to directory ${N%/*}"
+			trap '/bin/rm -rf "$I" "$I~"' 0
+			case $1 in
+			-)	Get "$P" $2 "$I" +;;
+			l)	M=; /bin/ln -sf "$5" "$I"
+			esac
+		fi
+		[ -z "$M" ] || /bin/chmod "$3" "${I:-$N}" 2>/dev/null ||
+			Err "Can't set mode as $3 for ${I:-$N}"
+		if [ -n "$C" ]; then
+			[ x$1 = xl ] || C=
+			/bin/chown ${C:+-h} "$4" "${I:-$N}" 2>/dev/null ||
+				Err "Can't set ownership as $4 for ${I:-$N}"
+		fi
+		if [ -n "$I" ]; then
+			/bin/mv -T --backup=numbered "$I" "$N" 2>/dev/null &&
+				trap 0 || Err "Can't restore $N"
+		fi
+	done
+esac
