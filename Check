@@ -58,7 +58,10 @@ Rss tmp/setuid.out = "/usr/bin/diff -U0" Changes in setuid/setgid files
 /usr/bin/find $(/bin/mount |
   /usr/bin/awk '$5 ~ /^ext/ && $6 !~ /nosuid/ { print $3 }') \
     -mount -type f \( -perm -u+s -o -perm -g+s \) |
-      /usr/bin/xargs /bin/ls -lbdq --time-style=full-iso
+      /usr/bin/xargs /bin/ls -lbdq --time-style="+%F %T"
+#
+Rss tmp/etc.out = "/usr/bin/diff -U0" Changes in /etc directory
+/bin/ls -lbdq --time-style="+%F %T" /etc/* /etc/cron.d/* /etc/rc.d/*
 #
 Rss - Security messages
 LOG=/var/log/authlog.0
@@ -110,9 +113,8 @@ esac
 DiffShadow() {
 /usr/bin/diff -U0 "$1" "$2" | /bin/sed 's/^\(.[^: ]*:\)[^:]*/\1(password)/;$q 1'
 }
-Rss /etc/ - "*-" - "*/*" - adjtime @ false
+Rss /etc
 Rss /etc/Check
-Rss /etc/cron.d/ @ false
 Rss /etc/exim/
 Rss /etc/fstab
 Rss /etc/group
@@ -122,10 +124,8 @@ Rss /etc/lilo.conf
 Rss /etc/ntp.conf
 Rss /etc/passwd
 Rss /etc/rc.conf
-Rss /etc/rc.d/ @ false
 Rss /etc/resolv.conf
 Rss /etc/shadow = DiffShadow
 Rss /etc/ssh/ - moduli
-Rss /etc/ssh/moduli @ false
 Rss /etc/sudoers
 Rss /etc/syslog.conf

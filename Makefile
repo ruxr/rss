@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.19 (C) 2007-2019 by Roman Oreshnikov
+#	@(#) Makefile V1.19.1 (C) 2007-2019 by Roman Oreshnikov
 #
 # Note: Use SQLite version 3 & xdelta3
 #

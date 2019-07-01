@@ -1,4 +1,4 @@
-.TH Rss 1 2019 1.19
+.TH Rss 1 2019 1.19.1
 .SH NAME
 Rss - Reports/Restore shell script
 .SH SYNOPSIS
@@ -8,7 +8,7 @@ Rss - Reports/Restore shell script
 .I [subject]
 .br
 .B Rss
-.I [-U use] [-D date] [-R path] [-n]
+.I [-U use] [-D date] [-R path]
 .B \-b path
 .I [path ...]
 .br
@@ -91,7 +91,7 @@ Show full information about live objects
 List of live objects
 .TP
 .B -n
-Invert condition, skip file contents during backup
+Invert condition
 .TP
 .B -o
 Output file content to
@@ -162,7 +162,7 @@ The beginning of a shell script implicitly determines the beginning of a stage.
 Internal function for reports mode:
 
 .B Rss
-.I [path [[-|+ part] [@ edit]] [= diff] [text]]
+.I [path [[-|+ part] [= diff] [text]]
 .TP
 .I path
 .br
@@ -177,10 +177,6 @@ Pattern to exclude from testing
 .IR +\ part *
 Pattern to include in testing
 .TP
-.IR @\ edit **
-Command to convert the source file to
-.I STDOUT
-.TP
 .I = diff
 .br
 Non default command to output differences between stored and current
@@ -192,13 +188,7 @@ Comment for report
 .TP
 Notes:
 .br
-if edit is '\fIfalse\fR', the contents of the file are not saved
-.br
-if diff is '\fIfalse\fR', the file are saved without differences checking
-.br
 *  - for hierarchy testing
-.br
-** - for absolute path
 .PP
 Each stage is analyzed for the completion code and the availability of
 output to
@@ -258,7 +248,6 @@ Sample shell script for common admin tasks using \fBRss\fR:
  Rss /etc/hosts = "diff -U0"
  Rss /etc/localtime Check timezone
  Rss /etc/ssh/ - moduli
- Rss /etc/ssh/ + moduli @ false
    cmp_shadow() {
      /usr/bin/diff -U0 "$1" "$2" |
        /bin/sed 's/^\\(\.[^:\ ]*:\\)[^:]*/\1(password)/;$q 1'
@@ -285,8 +274,7 @@ Modified files save. Wherein:
 -\ file \fI/etc/hosts\fR check for changes regarding saved with \fIdiff -U0\fR;
 .RE
 -\ recursively bypass the \fI/etc/ssh\fR directory hierarchy and check for
-changes. For regular files falling under the \fImoduli\fR template, do not
-save content;
+changes. Do not check files that fall under the \fImoduli\fR template;
 .RE
 -\ checking the \fI/etc/shadow\fR file on changes using the function
 \fIcmp_shadow\fR.

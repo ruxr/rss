@@ -1,12 +1,12 @@
 #!/bin/sh
 RSSH="Reports/Restore shell script
 
-	@(#) Rss V1.19 (C) 2007-2019 by Roman Oreshnikov
+	@(#) Rss V1.19.1 (C) 2007-2019 by Roman Oreshnikov
 
 This is free software, and comes with ABSOLUTELY NO WARRANTY
 
 Usage: Rss [-U use] [-R rcpt] -s path [subject]
-  or   Rss [-U use] [-D date] [-R path] [-n] -b path [path ...]
+  or   Rss [-U use] [-D date] [-R path] -b path [path ...]
   or   Rss [-U use] [-D date] [-R root] [-n] -{rtx} pattern [pattern ...]
   or   Rss [-U use] [-D date] [-n] -{aceil} pattern [pattern ...]
   or   Rss [-U use] [-D date] -o path
@@ -20,7 +20,7 @@ Options:
   -h       Display this text
   -i       Show full information about live objects
   -l       List of live objects
-  -n       Invert condition, skip file contents during backup
+  -n       Invert condition
   -o       Output file content to STDOUT
   -R PATH  Backup the object as PATH
   -R RCPT  Recipient for mail reports (default: \$LOGNAME)
@@ -32,21 +32,17 @@ Options:
   -x       Restore file revisions with the save date as extensions
 
 Internal function for reports mode:
-Rss [path [[-|+ part] [@ edit]] [= diff] [text]]
+Rss [path [-|+ part] [= diff] [text]]
   path     Absolute path for testing or relative name to save the output of the
              following commands, except the name '-'. If absolute path ends
              with / - will be tested all hierarchy
   - part*  Pattern to exclude from testing
   + part*  Pattern to include in testing
-  @ edit** Command to convert the source file to STDOUT
   = diff   Non default command to output differences between stored and current
              version the file (default: /usr/bin/diff -ut)
   text     Comment for report
 Notes:
-  if edit is 'false', the contents of the file are not saved
-  if diff is 'false', the file are saved without differences checking
   *  - for hierarchy testing
-  ** - for absolute path
 
 Report bugs to <r.oreshnikov@gmail.com>"
 RSSA=	# Action
@@ -88,58 +84,43 @@ umask 066
 # Report
 #
 Rss() {
-	RSSE=$? RSS=
-	while [ $RSSE = 0 -a -n "$RSSN" ]; do	# Processing the path
-		if [ -n "${RSSN##/*}" ]; then RSS=$RSST/1; RSSP=
-		elif [ -s "$RSST/1" ]; then break
-		elif [ "x$RSSP" = xfalse -o ! -f "$RSSN" -o -L "$RSSN" ]; then
-			echo "$RSSN" >>"$RSST/5"; break
-		elif [ -r "$RSSN" ]; then RSS=$RSSN
+	RSSE=$? RSS=$RSST/1
+	while [ "$RSSE" = 0 ]; do
+		if [ -n "${RSSN##/*}" ]; then
+			RSSE=$RSS RSS=$RSST/2; exec >"$RSS" 2>&1
+		elif [ -s "$RSS" ]; then break
+		elif [ -z "$RSSN" ]; then RSS=; break
+		elif [ ! -f "$RSSN" -o -L "$RSSN" ]; then
+			$0 -U "$RSSU" -b "$RSSN" && RSS=; break
+		elif [ -r "$RSSN" ]; then RSSE=$RSSN
 		else Wrn "Failed to access $RSSN"; break
 		fi
-		exec >"$RSST/2" 2>&1
-		if [ "x$RSSA" != xfalse ]; then
-			$0 -U "$RSSU" -o "$RSSN" >"$RSST/3" || break
-			if [ -z "$RSSP" ]; then RSSP=$RSST/3
-			else	# Edit the files
-				$RSSP "$RSST/3" >"$RSST/1" &&
-					$RSSP "$RSSN" >"$RSST/3"
-				case $? in
-				[!0]*) Wrn "The edit exit code: $?"; break
-				esac
-				RSSP=$RSST/1 RSS=$RSST/3
-			fi
-			# Compare the resulting file with a saved one
-			${RSSA:-/usr/bin/diff -ut} "$RSSP" "$RSS"
-			case $? in
-			0)	[ -z "${RSSN##/*}" ] || break;;
-			1);;
-			*)	Wrn "The comparison exit code: $?"; break
-			esac
-			[ -z "${RSSN##/*}" ] && RSS=$RSSN; RSSP=
-		fi
-		# Save object
-		$0 -U "$RSSU" -R "$RSSN" -b "$RSS"
-		break
+		[ ! "x$RSSC" = xfalse ] && {
+		$0 -U "$RSSU" -o "$RSSN" >"$RSST/3" || break
+		${RSSC:-/usr/bin/diff -ut} "$RSST/3" "$RSSE"; }
+		case $? in
+		0);;
+		1) $0 -U "$RSSU" -R "$RSSN" -b "$RSSE";;
+		*) Wrn "The comparison exit code: $?"
+		esac
+		[ -s "$RSS" ] || RSS=
 	done
-	[ -z "$RSS" ] && RSS=$RSST/1 || RSS=$RSST/2
 	# Send previous stage report
-	if [ $RSSE != 0 -o -s "$RSS" ]; then
+	if [ -n "$RSS" ]; then
 		[ ! -s "$RSST/0" -a -n "$RSSH" ] && {
 			echo "$RSSH$RSSM"; /bin/cat "$RSS"
 			} | /usr/sbin/sendmail -t >"$RSST/0" 2>&1 || {
-			[ -z "$RSSM" ] || echo "$RSSM"; /bin/cat "$RSS"; echo
+			echo "${RSSM:--n}"; /bin/cat "$RSS"; echo
 			} >>"$RSST/0"
 	fi
 	# New stage
 	exec >"$RSST/1" 2>&1
-	RSSN= RSSM="### Rss $*:"
+	RSSC= RSSN= RSSM="### Rss $*:" RSSP=$1
 	case /$1/ in
-	//)	[ $# != 0 ] || RSSM=;;
-	/-/)	shift; [ $# = 0 ] && RSSM= || RSSM="### $*:";;
+	/-/|//)	[ $# = 0 ] || shift; RSSM=${*:+### $*:};;
 	/*//*/|/-*|*/./*|*/../*|*[*?\[\]\'\\\ \	]*|/[!/]*//)
 		Wrn "Invalid object name $1";;
-	*//)	RSSP=$1 RSSA= RSSE= RSS=
+	*//)	RSSE= RSS=
 		while shift; do # Get patterns
 			case $1 in [+-]);; *) break;; esac
 			if [ "x${RSS:-$1}" != x$1 ]; then
@@ -147,74 +128,74 @@ Rss() {
 			elif [ -z "$2" ]; then
 				Wrn "Missing pattern for $1"; return
 			fi
-			RSS=$1 RSSA="$RSSA $RSSP$2"; shift
+			RSS=$1 RSSC="$RSSC $RSSP$2"; shift
 		done
-		if [ -n "$RSSA" ]; then
+		if [ -n "$RSSC" ]; then
 			case $RSS in -) RSS='d;';; *) RSS='p;'; RSSE=-n;; esac
-			RSSA=$(echo "$RSSA" | /bin/sed 's%//[/]*%/%g
+			RSSC=$(echo "$RSSC" | /bin/sed 's%//[/]*%/%g
 				s%\([$/.]\)%\\\1%g;s%\[!%[^%g;s%?%.%g;s%*%.*%g
 				s% \([^ ]*\)%/^\1$/'$RSS'/^\1\\//'$RSS'%g')
 		fi
 		{ $0 -U "$RSSU" -l "$RSSP*" && /usr/bin/find "$RSSP"
 		} >"$RSST/2" || return
-		/bin/sed $RSSE "s%/$%%;$RSSA" "$RSST/2" |
+		/bin/sed $RSSE "s%/$%%;$RSSC" "$RSST/2" |
 			LANG=C /usr/bin/sort -u >"$RSST/4"
 		exec <"$RSST/4"
 		while read RSS; do Rss "$RSS" "$@"; done;;
-	*)	RSSP= RSSA= RSSN=$1
-		while shift; do # Get parameters
-			case $1 in @) RSSP=$2;; =) RSSA=$2;; *) break;; esac
-			case $(type ${2%% *}) in
-			${2%% *}" is "[/.]*|${2%% *}" is a s"*) shift; continue
+	*)	while shift; do # Get parameters
+			case $1 in
+			=) [ -n "$RSSC" ] && Wrn "Comparator already set" &&
+				return || RSSC=$2;;
+			*) break
 			esac
-			RSSN= RSS=${2:+Illegal}
-			Wrn "${RSS:-Missing} value for $1"; return
-		done
-		[ $# = 0 ] && RSSM="### Changes in $RSSN:" || RSSM="### $*:"
+			case $(type ${2%% *}) in
+			${2%% *}" is "[/.]*|${2%% *}" is a s"*) shift;;
+			*) RSS=${2:+Illegal}; Wrn "${RSS:-Missing} value for $1"
+				return
+			esac
+                done
+		RSSN=$RSSP RSSM="### ${*:-Changes in $RSSN}:"
 	esac
 }
-if [ $RSSA = s ]; then
-	RSSS=$1; shift; RSSM="$*"
-	if [ -d "$RSSS" ]; then set -- "$RSSS"/*
-	elif [ ! -f "$RSSS" ]; then Err "Missing file $RSSS"
-	elif [ ! -x "$RSSS" ]; then Err "Not executable file $RSSS"
-	else set -- "$RSSS"
+case $RSSA in
+s)	RSSA=$1; shift; RSS="$*"
+	if [ -d "$RSSA" ]; then set -- "$RSSA"/*
+	elif [ ! -f "$RSSA" ]; then Err "Missing file $RSSA"
+	elif [ ! -x "$RSSA" ]; then Err "Not executable file $RSSA"
+	else set -- "$RSSA"
 	fi
 	RSST=$(/usr/bin/mktemp -dq) || Err "Can't create temporary directory"
 	trap "/bin/rm -rf $RSST" 0
-	RSSD=$(/bin/date)
-	[ -z "$RSSR$RSSM" ] && RSSH= || RSSR=${RSSR:-$LOGNAME} RSSH="To: $RSSR
-Subject: ${RSSM:-Rss report of run $RSSS}
+	[ -z "$RSSR$RSS" ] && RSSH= || RSSR=${RSSR:-$LOGNAME} RSSH="To: $RSSR
+Subject: ${RSS:-Rss report of run $RSSA}
 MIME-Version: 1.0
 Content-Type: text/plain; charset=utf-8
 Content-Disposition: inline
 Content-Transfer-Encoding: 8bit
 "
-	readonly RSSD RSSH RSST RSSU Rss Wrn
-	RSSM= RSSN=
-	for RSSS do
-		[ -f "$RSSS" -a -x "$RSSS" ] &&
+	RSSD=$(/bin/date) RSSN=
+	readonly RSSH RSST RSSU Rss Wrn
+	for RSSA do
+		[ -f "$RSSA" -a -x "$RSSA" ] &&
 		(
 		trap Rss 0
-		Rss - "Run $RSSS"
-		[ -r "$RSSS" ] || Err "Failed to access $RSSS"
-		case $RSSS in */*);; *) RSSS=./$RSSS;; esac
-		. "$RSSS"
+		Rss - "Run $RSSA"
+		[ -r "$RSSA" ] || Err "Failed to access $RSSA"
+		case $RSSA in */*) . "$RSSA";; *) . "./$RSSA";; esac
 		)
 	done
+	[ -r "$RSSU" ] &&
 	(
 	trap Rss 0
 	Rss - Changed objects
-	[ -s "$RSST/5" ] &&
-		$0 -U "$RSSU" -nb $(LANG=C /usr/bin/sort -u "$RSST/5")
-	[ ! -r "$RSSU" ] || $0 -U "$RSSU" -D "$RSSD" -c \*
+	$0 -U "$RSSU" -D "$RSSD" -c \*
 	)
 	if [ -s "$RSST/0" ]; then
 		[ -z "$RSSR" ] || Wrn "Can't send mail to $RSSR"
 		/bin/cat "$RSST/0"
 	fi
 	exit
-fi
+esac
 #
 # Restore
 #
@@ -297,8 +278,7 @@ b)	Dir /
 		@*)	[ -z "$4" ] && continue; T=$1;;
 		dd)	[ "$I" = "'$4 $5'" ] && continue;;
 		ll)	[ "$I" = "'$4 $5 $6'" ] && continue;;
-		-*)	case $I$1 in "'$4 $5 $6'"[=-]) continue;; esac
-			[ -z "$RSSN" ] && B= || T==
+		-*)	case $I$1 in "'$4 $5 $6'"-) continue;; esac; B=
 		esac
 		if [ -n "$RSSD" ]; then
 			[ -z "$3" ] && D=$RSSD || D="MAX($RSSD,$3)"
@@ -391,7 +371,7 @@ x)	Dir
 				[ -r "$N" ] && T=- || Err "Failed to access $N"
 			fi
 			case $1$T in
-			[=-]-)	I=$(Md5 "$N"); [ "x$5" = "x$I" ] && I= || E=1;;
+			--)	I=$(Md5 "$N"); [ "x$5" = "x$I" ] && I= || E=1;;
 			dd)	I=;;
 			ll)	I=$(/bin/readlink "$N")
 				[ "x$5" = "x$I" ] && I= || E=2;;
@@ -404,7 +384,7 @@ x)	Dir
 			break
 		done
 		case $1 in
-		-|=)	T="regular file";;
+		-)	T="regular file";;
 		d)	T="directory";;
 		l)	T="symbolic link";;
 		*)	Err "Data error for $P"
@@ -423,8 +403,6 @@ x)	Dir
 			continue
 		elif [ "x$E" = x0 ]; then
 			T="Restore access permissions for $T $N"
-		elif [ "x$1" = x= ]; then
-			Wrn "Can't restore $T $N. Content not saved"; continue
 		else
 			I=y T="Restore $T $N"
 		fi
