@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <!--
-        @(#) Rss.ru.html V1.19.1 (C) 2007-2019 by Roman Oreshnikov
+        @(#) Rss.ru.html V1.19.2 (C) 2007-2019 by Roman Oreshnikov
 -->
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -23,7 +23,7 @@
 <dl><b>
 Rss [-U use] [-R rcpt] -s path [subject]<br>
 Rss [-U use] [-D date] [-R path] -b path [path ...]<br>
-Rss [-U use] [-D date] [-R root] [-n] -{rtx} pattern [pattern ...]<br>
+Rss [-U use] [-D date] [-R root] [-n] -{rx} pattern [pattern ...]<br>
 Rss [-U use] [-D date] [-n] -{aceil} pattern [pattern ...]<br>
 Rss [-U use] [-D date] -o path
 </b></dl>
@@ -86,8 +86,6 @@ Rss [-U use] [-D date] -o path
 		измененных объектов, по умолчанию это текущий каталог
 	<dt>-s path
 	<dd>имя исполняемого shell‑скрипта или каталога их содержащего
-	<dt>-t
-	<dd>протестировать восстановление указанных объектов
 	<dt>-U USE
 	<dd>использовать <i>USE</i> в качестве имени файла базы хранения,
 		по умолчанию это $HOME/.Rss
@@ -229,6 +227,7 @@ Rss /etc/shadow = cmp_shadow
 <h3>Переменные окружения:</h3>
 <table>
 <tr><th align=left>HOME<td>— домашний каталог пользователя
+<tr><th align=left>LOGNAME<td>— имя учетной записи пользователя
 <tr><th align=left>TMPDIR<td>— каталог для временных данных создаваемых во время работы
 оболочки
 </table>

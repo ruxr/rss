@@ -1,4 +1,4 @@
-.TH Rss 1 2019 1.19.1
+.TH Rss 1 2019 1.19.2
 .SH NAME
 Rss - Reports/Restore shell script
 .SH SYNOPSIS
@@ -14,7 +14,7 @@ Rss - Reports/Restore shell script
 .br
 .B Rss
 .I [-U use] [-D date] [-R root] [-n]
-.B -{rtx} pattern
+.B -{rx} pattern
 .I [pattern ...]
 .br
 .B Rss
@@ -28,11 +28,10 @@ Rss - Reports/Restore shell script
 .SH DESCRIPTION
 The
 .B Rss
-shell script is designed to simplify writing output analyzers of program
-executing results, to check for changes to regular files, to check
-the immutability of symbolic links and the presence of directories
-(including changing access rights to specified objects), and also to restore
-saved objects.
+shell script is designed to simplify the writing of program execution analyzers,
+check for changes in ordinary files, the immutability of symbolic links,
+the presence of directories (including changing access rights to specified
+objects), as well as to restore saved objects.
 
 In the first form,
 .B Rss
@@ -110,16 +109,13 @@ Restore to directory
 .B ROOT
 .TP
 .B -r
-Restoration of changed objects with confirmation request
+Restore objects with confirmation request
 .TP
 .B -s
 Execute shell script or a set of shell scripts from a directory
 .TP
-.B -t
-Objects recovery check
-.TP
 .B -U USE
-Database for use (default:
+Use base (default:
 .IR $HOME/.Rss )
 .TP
 .B -x
@@ -291,6 +287,9 @@ changes. Do not check files that fall under the \fImoduli\fR template;
 .TP
 .B HOME
 user's home directory.
+.TP
+.B LOGNAME
+user's login name.
 .TP
 .B TMPDIR
 directory for temporary data created at runtime.

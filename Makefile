@@ -1,7 +1,5 @@
 #
-#	@(#) Makefile V1.19.1 (C) 2007-2019 by Roman Oreshnikov
-#
-# Note: Use SQLite version 3 & xdelta3
+#	@(#) Makefile V1.19.2 (C) 2007-2019 by Roman Oreshnikov
 #
 BINDIR	= /bin
 JOBDIR	= /etc/cron.d
@@ -51,7 +49,17 @@ all:
 	echo "  uninstall - remove installed software"; \
 	echo "  dist      - create tarball for distribute"
 
-build: $(JOB)
+build: Rss.ok $(JOB)
+
+Rss.ok:	Makefile
+	@echo "Check required software"; \
+	if [ ! -x /usr/bin/sqlite3 ]; then \
+		echo "Missing sqlite3"; exit 1; \
+	elif [ ! -x /usr/bin/xdelta3 ]; then \
+		echo "Missing xdelta3"; exit 1; \
+	elif [ ! -x /usr/bin/xz ]; then \
+		echo "Missing xz"; exit 1; \
+	fi; >$@
 
 Rss.cron: Makefile
 	@echo "Build $@"; { \
@@ -60,7 +68,7 @@ Rss.cron: Makefile
 		"$(RSSDIR)/Check Rss report from \`/bin/uname -n\`"; \
 	} >$@
 
-install: $(JOB) $(BIN) $(MAN) $(RSS)
+install: Rss.ok $(JOB) $(BIN) $(MAN) $(RSS)
 	@echo "Install software"; set -e; \
 	$(INSTALL) -Dm 555 $(BIN) "$(DESTDIR)$(BINDIR)/$(BIN)"; \
 	$(INSTALL) -Dm 755 $(RSS) "$(DESTDIR)$(RSSDIR)/$(RSS)"; \
@@ -85,11 +93,11 @@ uninstall: $(JOB) $(BIN) $(MAN) $(RSS)
 	Uninstall "$(DESTDIR)$(JOBDIR)" Rss; \
 	Uninstall "$(DESTDIR)$(MANDIR)" $(MAN)
 
-test:	$(TST) $(BIN)
-	@$(CHMOD) 755 $(BIN) $?; ./$?
+test:	Rss.ok $(TST) $(BIN)
+	@$(CHMOD) u+x $(BIN); /bin/sh ./$(TST)
 
 clean:
-	@$(RM) -rf $(JOB) tst
+	@$(RM) -rf $(JOB) Rss.ok tst
 
 dist: Makefile $(SRC)
 	@set -e; D=`$(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Rss-\1/;q' Makefile`; \
