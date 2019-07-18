@@ -13,6 +13,11 @@ Rss - Checking system reboot
 D=$(TZ=UTC+24 /bin/date '+%a %b %e [^ ]* %Y')
 /usr/bin/last -F reboot | /bin/sed "/ $D /!d"
 #
+Rss tmp/services.out Changes in the services used
+for S in /etc/rc.d/*; do
+        [ -x "$S" ] && $S status
+done
+#
 Rss tmp/ip_addr.out "Changes in 'ip addr show' output"
 /sbin/ip addr show
 #
