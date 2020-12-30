@@ -1,6 +1,6 @@
 #!/bin/sh
 export LANG=C
-OUT="Test Reports/Restore shell script
+WRK="Test Reports/Restore shell script
 
 	@(#) Rss.tst V1.19.2 (C) 2007-2019 by Roman Oreshnikov
 
@@ -9,32 +9,25 @@ This is free software, and comes with ABSOLUTELY NO WARRANTY
 Usage: Rss.tst [-n]
 
 Options:
-  -n  Don't exit after the first error
   -h  Display this text
+  -n  Don't exit after the first error
 
 Report bugs to <r.oreshnikov@gmail.com>"
 #
 CON=
-while getopts eh TMP; do
-	case $TMP in
+while getopts nh I; do
+	case $I in
 	n) CON=y;;
-	h) echo "$OUT"; exit;;
-	?) echo "$OUT"; exit 1
+	h) echo "$WRK"; exit;;
+	?) echo "$WRK"; exit 1
 	esac
 done
 #
-WRK=tst
-DBF=$WRK/.Rss
-LOG=$WRK/Log
-INF=$WRK/.inf
-ERR=$WRK/.stderr
-OUT=$WRK/.stdout
-TMP=$WRK/.tmp
-REP=$WRK/report
-TST=$(pwd)/$WRK
+WRK=$(pwd)
+ALL=0
 SUM=0
 TTY=
-LST="$WRK/dir $WRK/dir/file $WRK/dir/link $WRK/dir/none"
+LST="dir dir/file dir/link dir/none"
 Chk() {
 	for P in $LST; do
 		I=$(/usr/bin/stat -c '%a %U:%G' "$P" 2>/dev/null)
@@ -45,63 +38,63 @@ Chk() {
 		fi
 	done
 }
-Sql() { /usr/bin/sqlite3 -separator ' ' "$DBF" "$*"; }
+Sql() { /usr/bin/sqlite3 -separator ' ' .Rss "$*"; }
 Rss() {
 	{ echo -n "\$ Rss"
 	for P do
 		case $P in *[\ \*]*) echo -n " \"$P\"";; *) echo -n " $P";; esac
 	done
 	echo
-	} >>"$LOG"
-	case $1 in -?*) ./Rss -U "$DBF" "$@";; *)./Rss "$@";; esac
+	} >>Log
+	case $1 in -?*) ./Rss -U .Rss "$@";; *) ./Rss "$@";; esac
 	RSS=$?
 }
 Tst() {
+	ALL=$(expr $ALL + 1)
 	if [ -n "$TTY" ]; then
 		exec 1>"$TTY" 2>&1
-		/bin/cat "$ERR" "$OUT" >>"$LOG"
-		[ -s "$ERR" ]
+		/bin/cat .err .out >>Log
+		[ -s .err ]
 		case $?$RSS in
 		10) RSS=0;;
 		00) RSS=W;;
 		0*) RSS=E;;
 		*) RSS=
 		esac
-		[ -n "$RSS" ] && RSS=$RSS$(cat "$ERR" "$OUT" | wc -l)
+		[ -n "$RSS" ] && RSS=$RSS$(cat .err .out | wc -l)
 		if [ "x$RSS" = "x$OPT" ]; then
 			echo Ok
 		else
 			echo Fi
-			echo "; $OPT != $RSS" >>"$LOG"
+			echo "; $OPT != $RSS" >>Log
 			echo "; $OPT != $RSS"
 			SUM=$(expr $SUM + 1)
 			[ -n "$CON" ] || shift $#
 		fi
 	else
 		TTY=$(/usr/bin/tty)
-		/bin/rm -rf "$WRK" && mkdir -p "$WRK" || exit
 		trap Tst 0
-		/bin/date "+; Start test: %c" >>"$LOG"
+		/bin/date "+; Start test: %c" >>Log
 	fi
 	if [ $# = 0 ]; then
 		trap 0
-		/bin/date "+%n; End test: %c" >>"$LOG"
-		echo -n "Тестирование завершено (ошибок $SUM)."
-		echo " Ход тестирования в файле $LOG"
+		/bin/date "+%n; End test: %c" >>Log
+		echo "	$ALL тестов завершено (ошибок $SUM)"
+		echo "	Ход тестирования в файле $WRK/Log"
 		exit 0
 	fi
 	OPT=$1
 	shift
 	echo -n "   - $@\r"
-	echo "\n; $@" >>"$LOG"
-	exec 2>"$ERR" >"$OUT"
+	echo "\n; $@" >>Log
+	exec 2>.err >.out
 	RSS=0
 }
 #
 # Tst {0|E|W}{line} Description
 #
 echo Тестированиe функционирования Rss
-Tst 045 Получение справки
+Tst 047 Получение справки
 	Rss -h
 Tst 01 Запуск без ключей и параметров
 	Rss
@@ -122,20 +115,20 @@ Tst E1 Попытка работы с некорректной таблицей
 Tst E1 Попытка сохранения объектa с некорректным именем
 	Rss -b . ..
 Tst 00 Попытка сохранения несуществующего объекта
-	Rss -b "$WRK/dir"
+	Rss -b dir
 Tst E1 Попытка сохранения с заданием имени объектa без указания исходника
-	Rss -R "$WRK/dir/none" -b
+	Rss -R dir/none -b
 Tst E1 Попытка сохранения с заданием имени объектa и лишним аргументом
-	Rss -R "$WRK/dir/none" -b "$OUT" none
+	Rss -R dir/none -b .out none
 Tst E1 Сохранениe с заданием некорректного имени объектa
-	Rss -R " " -b "$OUT"
+	Rss -R " " -b .out
 Tst 00 Сохранениe с заданием имени объектa и датой
-	Rss -D " " -R "$WRK/dir/none" -b "$OUT"
+	Rss -D " " -R dir/none -b .out
 Tst 00 Сохранение объектов \(Version 1\)
-	mkdir -p "$WRK/dir"
-	ln -sf none "$WRK/dir/link"
-	echo Version 1 >"$WRK/dir/file"
-	Chk >"$INF"
+	mkdir -p dir
+	ln -sf none dir/link
+	echo Version 1 >dir/file
+	Chk >.inf
 	Rss -b $LST
 	V1=$(date)
 Tst 04 Получение списка измененных объектов
@@ -147,77 +140,77 @@ Tst 05 Получение полной информации о всех объе
 Tst 03 Получение информации об активных объектах
 	Rss -i \*
 Tst 00 Восстановление измененных объектов
-	echo >"$WRK/dir/file"
-	chmod 660 "$WRK/dir/file"
-	rm "$WRK/dir/link"
-	ln -sf file "$WRK/dir/link"
-	chmod 700 "$WRK/dir"
-	chgrp -R 0 "$WRK/dir"
+	echo >dir/file
+	chmod 660 dir/file
+	rm dir/link
+	ln -sf file dir/link
+	chmod 700 dir
+	chgrp -R 0 dir
 	Rss -nr \*
-	Chk | diff -U0 "$INF" -
+	Chk | diff -U0 .inf -
 Tst 00 Восстановление файла вместо каталога
-	rm "$WRK/dir/file"
-	mkdir "$WRK/dir/file"
-	Rss -nr "$WRK/dir/file"
+	rm dir/file
+	mkdir dir/file
+	Rss -nr dir/file
 Tst 00 Восстановление файла вместо ссылки
-	rm "$WRK/dir/file"
-	ln -sf bad "$WRK/dir/file"
-	Rss -nr "$WRK/dir/file"
+	rm dir/file
+	ln -sf bad dir/file
+	Rss -nr dir/file
 Tst 00 Восстановление ссылки вместо каталога
-	rm "$WRK/dir/link"
-	mkdir "$WRK/dir/link"
-	Rss -nr "$WRK/dir/link"
+	rm dir/link
+	mkdir dir/link
+	Rss -nr dir/link
 Tst 00 Восстановление ссылки вместо файла
-	rm "$WRK/dir/link"
-	touch "$WRK/dir/link"
-	Rss -nr "$WRK/dir/link"
+	rm dir/link
+	touch dir/link
+	Rss -nr dir/link
 Tst 00 Восстановление каталога вместо файла
-	rm -rf "$WRK/dir"
-	touch "$WRK/dir"
-	Rss -nr "$WRK/dir"
+	rm -rf dir
+	touch dir
+	Rss -nr dir
 Tst 00 Восстановление каталога вместо ссылки
-	rm -rf "$WRK/dir"
-	ln -s bad "$WRK/dir"
-	Rss -nr "$WRK/dir"
+	rm -rf dir
+	ln -s bad dir
+	Rss -nr dir
 Tst 00 Восстановление с нуля
-	rm -rf "$WRK/dir"
+	rm -rf dir
 	Rss -nr \*
-	Chk | diff -U0 "$INF" -
+	Chk | diff -U0 .inf -
 Tst E1 Попытка получения последней версии файла на STDOUT без указания имени
-	Rss -o >"$TMP"
+	Rss -o >.tmp
 Tst E1 Попытка получения последней версии файла на STDOUT с лишним аргументом
-	Rss -o "$WRK/dir/file" x >"$TMP"
+	Rss -o dir/file x >.tmp
 Tst 00 Получение последней версии на STDOUT несуществующего объекта
-	Rss -o "$WRK/x"
+	Rss -o x
 Tst 00 Получениe последней версии объекта не являющимся файлом на STDOUT
-	Rss -o "$WRK/dir/link"
+	Rss -o dir/link
 Tst 00 Получениe последней версии удаленного файла на STDOUT
-	Rss -o "$WRK/dir/none"
+	Rss -o dir/none
 Tst 00 Получение последней версии файла на STDOUT
-	Rss -o "$WRK/dir/file" >"$TMP"
-	diff -u "$WRK/dir/file" "$TMP"
+	Rss -o dir/file >.tmp
+	diff -u dir/file .tmp
 Tst 00 Сохранение объектов \(Version 2\)
 	sleep 1
 	V2=$(date +%s)
-	mkdir -p "$WRK/dir"
-	chmod 770 "$WRK/dir"
-	ln -sf file "$WRK/dir/link"
-	echo Version 2 >"$WRK/dir/file"
-	chmod 640 "$WRK/dir/file"
+	mkdir -p dir
+	chmod 770 dir
+	ln -sf file dir/link
+	echo Version 2 >dir/file
+	chmod 640 dir/file
 	Rss -b $LST
-	Chk >"$TMP"
+	Chk >.tmp
 Tst 00 Восстановления на заданную дату
 	Rss -D "$V1" -rn \*
-	Chk | diff -U0 "$INF" -
+	Chk | diff -U0 .inf -
 Tst 00 Восстановление последних версий объектов
 	Rss -rn \*
-	Chk | diff -U0 "$TMP" -
+	Chk | diff -U0 .tmp -
 Tst E1 Попытка восстановления файла в каталоге закрытом для записи
-	rm "$WRK/dir/file"
-	chmod 555 "$WRK/dir"
-	Rss -rn "$WRK/dir/file"
+	rm dir/file
+	chmod 555 dir
+	Rss -rn dir/file
 Tst 00 Восстановлениe каталога закрытого для записи
-	Rss -rn "$WRK/dir"
+	Rss -rn dir
 Tst 03 Получение списка активных объектов
 	Rss -l \*
 Tst 08 Получение краткой информации о всех версиях объектов
@@ -227,76 +220,76 @@ Tst 08 Получение полной информации о всех верс
 Tst E1 Попытка удаления всех, кроме последней, версий без указания имени объекта
 	Rss -e
 Tst 00 Полное удаление объекта из БД
-	Rss -en "$WRK/dir/none"
-	Sql "SELECT p FROM db WHERE p='$WRK/dir/none'"
+	Rss -en dir/none
+	Sql "SELECT p FROM db WHERE p='dir/none'"
 Tst 00 Удаление всех, кроме последней, версий объектов
 	Rss -e \*
-	Sql "SELECT p FROM db" | sort >"$TMP"
-	sort -u "$TMP" | diff -U0 "$TMP" -
+	Sql "SELECT p FROM db" | sort >.tmp
+	sort -u .tmp | diff -U0 .tmp -
 Tst 03 Получение краткой информации о всех версиях объектов
 	Rss -a \*
 Tst 00 Полная очистка БД
 	Rss -en \*
-	Sql "SELECT p FROM db" | sort >"$TMP"
+	Sql "SELECT p FROM db" | sort >.tmp
 Tst 00 Сохранение объекта по имени
-	Rss -b -R "$WRK/dir/none" "$LOG"
+	Rss -b -R "dir/none" Log
 Tst 00 Повторное сохранение объекта по имени
-	Rss -b -R "$WRK/dir/none" "$LOG"
+	Rss -b -R "dir/none" Log
 Tst E1 Попытка восстановления объекта с ошибкой в БД
 	Sql "UPDATE db SET d='1970-01-01 00:00:00', b='aaaaa' WHERE rowid=1"
 	Rss -D 0 -rn \*
 Tst E1 Получение последней версии файла на STDOUT для записи с ошибкой в БД
 	Sql "UPDATE db SET b='/aaaaa' WHERE rowid=2"
-	Rss -o "$WRK/dir/none" >"$TMP"
+	Rss -o dir/none >.tmp
 Tst E1 Обновление объекта для записи с ошибкой в БД
-	Rss -b -R "$WRK/dir/none" "$LOG"
+	Rss -b -R dir/none Log
 Tst 00 Полная очистка БД для тестирования режима отчета
-	rm -rf "$WRK/dir"*
+	rm -rf dir
 	Rss -en \*
-	Sql "SELECT p FROM db" | sort >"$TMP"
+	Sql "SELECT p FROM db" | sort >.tmp
 Tst E1 Попытка запуска Rss в режиме отчета без указания аргумента
 	Rss -s
 Tst E1 Попытка запуска Rss в режиме отчета для неисполняемого файла
-	touch "$REP"
-	Rss -s "$REP"
+	touch Rep
+	Rss -s Rep
 Tst 00 Попытка запуска Rss в режиме отчета для пустого каталога
-	mkdir -p "$WRK/dir/rep"
-	Rss -s "$WRK/dir/rep"
+	mkdir -p dir/rep
+	Rss -s dir/rep
 Tst 024 Подготовка тестовых отчетов в каталоге
 	for N in 0 1 2 3; do
-		echo "$ cat $WRK/dir/rep/r$N"
-		echo "#/bin/sh\necho Report $N\n" | tee "$WRK/dir/rep/r$N"
+		echo "$ cat dir/rep/r$N"
+		echo "#/bin/sh\necho Report $N\n" | tee dir/rep/r$N
 	done
-	chmod 755 "$WRK/dir/rep/r"[1-3]
-	echo \$ ls -al "$WRK/dir/rep"
-	ls -al "$WRK/dir/rep"
+	chmod 755 dir/rep/r[1-3]
+	echo \$ ls -al dir/rep
+	ls -al dir/rep
 Tst 09 Запуск Rss в режиме отчета для каталога c примерами отчетов
-	Rss -s "$WRK/dir/rep"
+	Rss -s dir/rep
 Tst 016 Формирование тестового отчета с ошибками вызова
-	cat <<-END >"$REP"
-	Rss "$TST/*"
-	Rss "$TST/./dir"
-	Rss "$TST/../dir"
-	Rss "$TST/d'ir"
-	Rss "$TST//dir"
-	Rss "$TST/ /dir"
-	Rss TST/dir/
-	Rss "$TST/dir/" +
-	Rss "$TST/dir/" + /a
-	Rss "$TST/dir/" + a/./
-	Rss "$TST/dir/" + ../b
-	Rss "$TST/dir/" + 'a b'
-	Rss "$TST/dir/" + a - b
-	Rss "$TST/dir" =
-	Rss "$TST/dir/rep/r0" = None
+	cat <<-END >Rep
+	Rss "$WRK/*"
+	Rss "$WRK/./dir"
+	Rss "$WRK/../dir"
+	Rss "$WRK/d'ir"
+	Rss "$WRK//dir"
+	Rss "$WRK/ /dir"
+	Rss WRK/dir/
+	Rss "$WRK/dir/" +
+	Rss "$WRK/dir/" + /a
+	Rss "$WRK/dir/" + a/./
+	Rss "$WRK/dir/" + ../b
+	Rss "$WRK/dir/" + 'a b'
+	Rss "$WRK/dir/" + a - b
+	Rss "$WRK/dir" =
+	Rss "$WRK/dir/rep/r0" = None
 	END
-	chmod 755 "$REP"
-	echo "$ cat $REP"
-	cat "$REP"
+	chmod 755 Rep
+	echo "$ cat Rep"
+	cat Rep
 Tst 045 Запуск Rss в режиме отчета для тестового отчета с ошибками вызова
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 026 Формирование тестового отчета
-	cat <<-END >"$REP"
+	cat <<-END >Rep
 	#!/bin/sh
 	echo Тестовый отчет
 	Rss - Блок с ошибкой, без вывода
@@ -323,31 +316,31 @@ Tst 026 Формирование тестового отчета
 	Rss test/rep1 Блок без ошибки, сохранение результата в файл
 		echo Report 1
 	END
-	chmod 755 "$REP"
-	echo "$ cat $REP"
-	cat "$REP"
+	chmod 755 Rep
+	echo "$ cat Rep"
+	cat Rep
 Tst 033 Получение тестового отчета первый раз
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 024 Получение тестового отчета повторно
 	sleep 1
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 018 Формирование тестового отчета работы с файлами
-	mkdir -p "$WRK/dir"
-	echo >"$WRK/dir/file"
-	echo File 0 >"$WRK/dir/file0"
-	echo Version 1 >"$WRK/dir/file1"
+	mkdir -p dir
+	echo >dir/file
+	echo File 0 >dir/file0
+	echo Version 1 >dir/file1
 	{
 		echo "root::0::::::"
 		echo "mail:x:0::::::"
-	} >"$WRK/dir/file2"
+	} >dir/file2
 	{
 		echo "#\n"; echo
 		echo "Text"; echo
 		echo "Line"; echo
 		echo "Word"; echo
 		echo "End"; echo
-	} >"$WRK/dir/file3"
-	cat <<-END >"$REP"
+	} >dir/file3
+	cat <<-END >Rep
 	#!/bin/sh
 	Edit() { sed 's/Version/Release/' "\$1"; }
 	Diff() {
@@ -356,61 +349,141 @@ Tst 018 Формирование тестового отчета работы с
 	}
 	Di() { diff -U1 "\$1" "\$2"; }
 	# Файл отсутствует
-	Rss "$TST/dir/none"
+	Rss "$WRK/dir/none"
 	# Файл присутствует
-	Rss "$TST/dir/file"
+	Rss "$WRK/dir/file"
 	# Сравнение старой и новой версии не производится
-	Rss "$TST/dir/file0" = false
+	Rss "$WRK/dir/file0" = false
 	# Нестандартный поиск отличий
-	Rss "$TST/dir/file2" = Diff
+	Rss "$WRK/dir/file2" = Diff
 	# Другое свое сравнение
-	Rss "$TST/dir/file3" = Di
+	Rss "$WRK/dir/file3" = Di
 	END
-	chmod 755 "$REP"
-	echo "$ cat $REP"
-	cat "$REP"
+	chmod 755 Rep
+	echo "$ cat Rep"
+	cat Rep
 Tst 035 Получение тестового отчета работы с файлами первый раз
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 00 Получение тестового отчета работы с файлами повторно
 	sleep 1
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 021 Получение тестового отчета работы с файлами после изменений
-	rm "$WRK/dir/file"
-	echo Version 2 >"$WRK/dir/file1"
-	echo "nobody:xxx:0::::::" >>"$WRK/dir/file2"
-	echo "#\nappend\n" >>"$WRK/dir/file3"
-	chmod 444 "$WRK/dir/file0"
-	chmod 600 "$WRK/dir/file2"
+	rm dir/file
+	echo Version 2 >dir/file1
+	echo "nobody:xxx:0::::::" >>dir/file2
+	echo "#\nappend\n" >>dir/file3
+	chmod 444 dir/file0
+	chmod 600 dir/file2
 	sleep 1
-	Rss -s "$REP"
+	Rss -s Rep
 Tst 016 Формирование тестового отчета работы со списками файлов
-	echo "$ find $TST/dir | sort | xargs ls -ald"
-	find $TST/dir | sort | xargs ls -ald
+	echo "$ find dir | sort | xargs ls -ald"
+	find dir | sort | xargs ls -ald
 	echo
-	cat <<-END >"$REP"
+	cat <<-END >Rep
 	#!/bin/sh
-	Rss $TST/dir/ + rep = false  Различия не ищутся
-	Rss $TST/dir/ - rep
+	Rss $WRK/dir/ + rep = false  Различия не ищутся
+	Rss $WRK/dir/ - rep
 	END
-	chmod 755 "$REP"
-	echo "$ cat $REP"
-	cat "$REP"
-	V3=$(date)
+	chmod 755 Rep
+	echo "$ cat Rep"
+	cat Rep
 Tst 015 Получение тестового отчета работы со списком файлов
 	sleep 1
-	Rss -s "$REP"
+	V3=$(date)
+	Rss -s Rep
 Tst 00 Внесение изменений в тестовые файлы и их сохранение
-	echo New >"$WRK/dir/file"
-	echo Version 3 >"$WRK/dir/file1"
-	echo "user:aa:0::::::" >>"$WRK/dir/file2"
-	echo Clean >"$WRK/dir/file3"
+	echo New >dir/file
+	echo Version 3 >dir/file1
+	echo "user:aa:0::::::" >>dir/file2
+	echo Clean >dir/file3
 	sleep 1
-	Rss -b "$TST/dir/"*
+	Rss -b "$WRK/dir/"*
 Tst 012 Получение всех версий файлов
-	Rss -R "$WRK/0" -x \*/file\* && ls "$WRK/0$TST/dir"
-Tst 07 Получение всех версий файлов до даты
-	Rss -R "$WRK/1" -D "$V3" -x \*file\* && ls "$WRK/1$TST/dir"
+	Rss -R 0 -x \*/file\* && ls 0$WRK/dir
 Tst 05 Получение всех версий файлов старше даты
-	Rss -R "$WRK/2" -D "$V3" -nx \*file\* && ls "$WRK/2$TST/dir"
-Tst W1 Получение всех версий файлов старше текущей даты
-	Rss -R "$WRK/3" -nx \*file\* && ls "$WRK/3$TST/dir"
+	Rss -R 1 -D "$V3" -x \*file\* && ls 1$WRK/dir
+Tst 00 Очищаем БД для тестирования удаления и вывода различий
+	Rss -ne \*
+Tst 02 Первая версия файла
+	echo 0 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	D0=$(date)
+	sleep 1
+Tst 02 Вторая версия файла
+	echo 1 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	D1=$(date)
+	sleep 1
+Tst 01 Третья версия файла
+	rm a
+	echo "$ rm a"
+	Rss -b a
+	D2=$(date)
+	sleep 1
+Tst 02 Четвертая версия файла
+	echo 1 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	sleep 1
+Tst 02 Пятая версия файла
+	echo -1 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	D3=$(date)
+	sleep 1
+Tst 02 Шестая версия файла
+	echo 1 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	sleep 1
+Tst 02 Седьмая версия файла
+	echo 2 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+	sleep 1
+Tst 02 Восьмая версия файла
+	echo 3 >a
+	echo "$ cat a"
+	cat a
+	Rss -b a
+Tst 08 Проверяем количество объектов
+	Rss -an \*
+Tst E1 Удаляем несуществующий объект
+	Rss -z b
+Tst 05 Различия содержимого на заданную дату
+	Rss -D "$D1" -d a
+Tst 00 Удаляем самый старый файл
+	Rss -D "$D0" -z a
+Tst 04 Различия содержимого на заданную дату
+	Rss -D "$D1" -d a
+Tst 00 Удаляем отметку удаления, где версии до и после удаления идентичны
+	Rss -D "$D2" -z a
+Tst 05 Проверка наличия объектов в БД
+	Rss -an a
+Tst 00 Удаляем файл, где версии до и после него идентичны
+	Rss -D "$D3" -z a
+Tst 03 Проверка наличия объектов в БД
+	Rss -an a
+Tst 05 Различия между предпоследней и последней версиями файла
+	Rss -d a
+Tst 00 Удаляем последнюю версию файла
+	Rss -z a
+Tst 05 Различия между предпоследней и последней версиями файла
+	Rss -d a
+Tst 00 Оставляем единственный самый старый вариант
+	Rss -z a
+Tst 04 Различия для единственного варианта
+	Rss -d a
+Tst 00 Окончательное удаление объекта
+	Rss -z a
+Tst 00 Проверка на отсутствие объектов
+	Rss -an \*

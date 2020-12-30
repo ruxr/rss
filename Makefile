@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.19.3 (C) 2007-2019 by Roman Oreshnikov
+#	@(#) Makefile V1.20.0 (C) 2007-2020 by Roman Oreshnikov
 #
 BINDIR	= /bin
 JOBDIR	= /etc/cron.d
@@ -12,7 +12,6 @@ RSSDIR	= /etc
 NAME	= Reports/Restore shell scripts for administration
 
 BZIP2	= /usr/bin/bzip2
-CHMOD	= /bin/chmod
 CMP	= /usr/bin/cmp
 CP	= /bin/cp
 DATE	= /bin/date
@@ -32,7 +31,7 @@ TST	= Rss.tst
 
 SRC	= $(BIN) $(DOC) $(MAN) $(RSS) $(TST)
 
-.PHONY:	all build clean dist install uninstall
+.PHONY:	all build check clean dist install uninstall
 
 all:
 	@D=$(DESTDIR); \
@@ -49,9 +48,9 @@ all:
 	echo "  uninstall - remove installed software"; \
 	echo "  dist      - create tarball for distribute"
 
-build: Rss.ok $(JOB)
+build: $(JOB)
 
-Rss.ok:	Makefile
+check:
 	@echo "Check required software"; \
 	if [ ! -x /usr/bin/sqlite3 ]; then \
 		echo "Missing sqlite3"; exit 1; \
@@ -59,7 +58,7 @@ Rss.ok:	Makefile
 		echo "Missing xdelta3"; exit 1; \
 	elif [ ! -x /usr/bin/xz ]; then \
 		echo "Missing xz"; exit 1; \
-	fi; >$@
+	fi
 
 Rss.cron: Makefile
 	@echo "Build $@"; { \
@@ -68,7 +67,7 @@ Rss.cron: Makefile
 		"$(RSSDIR)/Check Rss report from \`/bin/uname -n\`"; \
 	} >$@
 
-install: Rss.ok $(JOB) $(BIN) $(MAN) $(RSS)
+install: check $(JOB) $(BIN) $(MAN) $(RSS)
 	@echo "Install software"; set -e; \
 	$(INSTALL) -Dm 555 $(BIN) "$(DESTDIR)$(BINDIR)/$(BIN)"; \
 	$(INSTALL) -Dm 755 $(RSS) "$(DESTDIR)$(RSSDIR)/$(RSS)"; \
@@ -93,11 +92,11 @@ uninstall: $(JOB) $(BIN) $(MAN) $(RSS)
 	Uninstall "$(DESTDIR)$(JOBDIR)" Rss; \
 	Uninstall "$(DESTDIR)$(MANDIR)" $(MAN)
 
-test:	Rss.ok $(TST) $(BIN)
-	@$(CHMOD) u+x $(BIN); /bin/sh ./$(TST)
+test:	check
+	@$(RM) -rf tst; $(INSTALL) -D $(BIN) tst/$(BIN); cd tst; sh ../$(TST)
 
 clean:
-	@$(RM) -rf $(JOB) Rss.ok tst
+	@$(RM) -rf $(JOB) tst
 
 dist: Makefile $(SRC)
 	@set -e; D=`$(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Rss-\1/;q' Makefile`; \

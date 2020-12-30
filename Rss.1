@@ -24,7 +24,7 @@ Rss - Reports/Restore shell script
 .br
 .B Rss
 .I [-U use] [-D date]
-.B -o path
+.B -{doz} path
 .SH DESCRIPTION
 The
 .B Rss
@@ -52,13 +52,10 @@ In the third form,
 .B Rss
 recovers saved files, symbolic links or directories.
 
-In the fourth form,
+In the fourth and fifth form,
 .B Rss
 performs operations with a database objects.
 
-In the fifth form,
-.B Rss
-output the contents of the latest version of the specified file to \fISTDOUT\fR.
 .SH OPTIONS
 .TP
 .B -a
@@ -76,6 +73,9 @@ Use
 .B DATE
 as timestamp (default:
 .IR now )
+.TP
+.B -d
+Show differences between a file and its previous version
 .TP
 .B -e
 Erase objects except last
@@ -120,6 +120,9 @@ Use base (default:
 .TP
 .B -x
 Restore file revisions with the save date as extensions
+.TP
+.B -z
+Delete object
 .TP
 Parameters:
 .TP

@@ -11,7 +11,7 @@ Rss - Mail in local queue
 #
 Rss - Checking system reboot
 D=$(TZ=UTC+24 /bin/date '+%a %b %e [^ ]* %Y')
-/usr/bin/last -F reboot | /bin/sed "/ $D /!d"
+/usr/bin/last -F reboot | /bin/sed "/ $D/!d"
 #
 Rss tmp/services.out Changes in the services used
 for S in /etc/rc.d/*; do
@@ -28,15 +28,13 @@ Rss tmp/root.crontab "Changes in root's crontab"
 /usr/bin/crontab -l -u root
 #
 Rss - Checking bad login attempts
-D=$(TZ=UTC+24 /bin/date '+%a %b %e [^ ]* %Y')
 /usr/bin/lastb -F | /bin/sed "/ $D /!d"
 #
 Rss - Checking failure log
 /usr/bin/faillog -t 1
 #
 Rss - Checking for uids of 0
-/usr/bin/awk -F: '/^[^#+-]/ { if($3 == 0 && $1 != "root") print $1 }' \
-  /etc/passwd
+/usr/bin/awk -F: '{ if($3 == 0 && $1 != "root") print $1 }' /etc/passwd
 #
 Rss tmp/accounts.out Changes in accounts status information
 /usr/bin/passwd -aS | /usr/bin/sort
@@ -49,9 +47,9 @@ Rss - Verifying the integrity of the groups information
 #
 Rss tmp/mailboxes.out Changes in active mailboxes
 /usr/bin/awk -F: '
-  /^[a-z]/ { if($1 in a) next; a[$1]=FILENAME; }
-  END { for(e in a) { if(a[e] == FILENAME) { print e; } } }
-' /etc/exim/aliases /etc/passwd | /usr/bin/sort
+	/^[a-z]/{ if(!($1 in a)) a[$1] = FILENAME }
+	END{	for(n in a) if(a[n] == FILENAME) print n
+	}' /etc/exim/aliases /etc/passwd | /usr/bin/sort
 #
 Rss tmp/mount.out Changes in mounted filesystems
 /bin/mount
@@ -69,23 +67,14 @@ Rss tmp/etc.out = "/usr/bin/diff -U0" Changes in /etc directory
 /bin/ls -lbdq --time-style="+%F %T" /etc/* /etc/cron.d/* /etc/rc.d/*
 #
 Rss - Security messages
+D=$(TZ=UTC+24 /bin/date '+%b %e')
 LOG=/var/log/authlog.0
-if [ -f "$LOG" ]; then
-  D=$(TZ=UTC+24 /bin/date '+%b %e')
-  /bin/sed "/^$D .* FAIL/!d" $LOG
-else
-  echo "$LOG is missing"
-fi
+[ -f "$LOG" ] && /bin/sed "/^$D .* FAIL/!d" $LOG || echo "$LOG is missing"
 #
 Rss - Rejected mail hosts
 LOG=/var/log/maillog.0
-if [ -f "$LOG" ]; then
-  D=$(TZ=UTC+24 /bin/date '+%b %e')
-  /bin/sed -n "s/^$D .* H=\([^ ]*\) .* rejected .*$/\1/p" $LOG |
-    /usr/bin/sort -f | /usr/bin/uniq -c | /usr/bin/sort -fnr
-else
-  echo "$LOG is missing"
-fi
+[ -f "$LOG" ] && /bin/sed -n "s/^$D .* H=\([^ ]*\) .* rejected .*$/\1/p" $LOG | 	/usr/bin/sort -f | /usr/bin/uniq -c | /usr/bin/sort -fnr ||
+		echo "$LOG is missing"
 #
 # Weekly jobs
 #
