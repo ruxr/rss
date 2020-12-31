@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.20.0 (C) 2007-2020 by Roman Oreshnikov
+#	@(#) Makefile V1.20.1 (C) 2007-2020 by Roman Oreshnikov
 #
 BINDIR	= /bin
 JOBDIR	= /etc/cron.d

@@ -23,7 +23,7 @@ Rss - Reports/Restore shell script
 .I [pattern ...]
 .br
 .B Rss
-.I [-U use] [-D date]
+.I [-U use] [-D date] [-n]
 .B -{doz} path
 .SH DESCRIPTION
 The
@@ -90,7 +90,7 @@ Show full information about live objects
 List of live objects
 .TP
 .B -n
-Invert condition
+Invert the condition or not ask for confirmation
 .TP
 .B -o
 Output file content to
@@ -122,7 +122,7 @@ Use base (default:
 Restore file revisions with the save date as extensions
 .TP
 .B -z
-Delete object
+Delete object with confirmation request
 .TP
 Parameters:
 .TP

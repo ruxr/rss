@@ -9,7 +9,7 @@ Usage: Rss [-U use] [-R rcpt] -s path [subject]
   or   Rss [-U use] [-D date] [-R path] -b path [path ...]
   or   Rss [-U use] [-D date] [-R root] [-n] -{rx} pattern [pattern ...]
   or   Rss [-U use] [-D date] [-n] -{aceil} pattern [pattern ...]
-  or   Rss [-U use] [-D date] -{doz} path
+  or   Rss [-U use] [-D date] [-n] -{doz} path
 
 Options:
   -a       Show all versions of objects with minimum information
@@ -21,7 +21,7 @@ Options:
   -h       Display this text
   -i       Show full information about live objects
   -l       List of live objects
-  -n       Invert condition
+  -n       Invert the condition or not ask for confirmation
   -o       Output file content to STDOUT
   -R PATH  Backup the object as PATH
   -R RCPT  Recipient for mail reports (default: \$LOGNAME)
@@ -30,7 +30,7 @@ Options:
   -s       Execute shell script or a set of shell scripts from a directory
   -U USE   Use base (default: \$HOME/.Rss)
   -x       Restore file revisions with the save date as extensions
-  -z       Delete object
+  -z       Delete object with confirmation request
 
 Internal function for reports mode:
 Rss [path [-|+ part] [= diff] [text]]
@@ -246,6 +246,19 @@ Tmp() {
 	W=$(/usr/bin/mktemp -dq) || Err Failed to create temporary directory
 	trap "/bin/rm -r $W" 0
 }
+Ask() {
+	case $3 in
+	-)	T="regular file";;
+	d)	T="directory";;
+	l)	T="symbolic link";;
+	*)	Err Data error for $2
+	esac
+	T="Rss: $1 $T $2"
+	[ -z "$4" ] || T="$T ($(/bin/date --date="@$4" +%F\ %T))"
+	[ -n "$RSSN" ] && echo "$T" && return
+	read -p "$T? [y/N]: " T
+	case $T in [yY]);; *) return 1;; esac
+}
 case $RSSA in
 [bdoz])	[ $# = 1 -o "$RSSA$RSSR" = b ] || Err "Only one argument is required";;
 *)	RSS=; for P do Rss "$P" pattern; RSS="${RSS:+$RSS OR }p GLOB '$P'"; done
@@ -363,16 +376,7 @@ r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 		else Err Failed to access $N
 		fi
 		[ "$1 $T${I:+ $I}${B:+ $B}" = "$*" ] && continue
-		case $2 in
-		-)	T="regular file";;
-		d)	T="directory";;
-		l)	T="symbolic link";;
-		*)	Err "Data error for $P"
-		esac
-		if [ -z "$RSSN" ]; then
-			read -p "Rss: Restore $T $N? " T
-			case $T in [yY]);; *) continue;; esac
-		fi
+		Ask Restore $N $2 || continue
 		/bin/mkdir -p ${N%/*} 2>/dev/null ||
 			Err Failed to create directory ${N%/*}
 		case $2 in
@@ -410,15 +414,16 @@ x)	Dir
 	done;;
 z)	Rss "$1"
 	[ -z "$RSSD" ] || RSSD="AND d<=datetime($RSSD,'unixepoch')"
-	N=$(Sql "SELECT rowid,t FROM db WHERE p='$1' $RSSD
+	N=$(Sql "SELECT rowid,t,strftime('%s',d) FROM db WHERE p='$1' $RSSD
 		ORDER BY rowid DESC LIMIT 2") || exit
 	[ -n "$N" ] || Err Failed to remove $1
 	P=$1 SQL=
 	set -- $N
+	Ask Delete $P $2 $3 || exit
 	S="DELETE FROM db WHERE rowid=$1; VACUUM"
-	case $2$4 in
+	case $2$5 in
 	[dl-]-) Tmp
-		Sql "SELECT rowid,t,i,b FROM db WHERE p='$P' AND rowid>=$3
+		Sql "SELECT rowid,t,i,b FROM db WHERE p='$P' AND rowid>=$4
 			ORDER BY rowid DESC" >$W/0
 		R2= R3= T2=x T3=x M2= M3= >$W/2 >$W/3
 		exec <$W/0

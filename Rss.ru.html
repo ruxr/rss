@@ -25,7 +25,7 @@ Rss [-U use] [-R rcpt] -s path [subject]<br>
 Rss [-U use] [-D date] [-R path] -b path [path ...]<br>
 Rss [-U use] [-D date] [-R root] [-n] -{rx} pattern [pattern ...]<br>
 Rss [-U use] [-D date] [-n] -{aceil} pattern [pattern ...]<br>
-Rss [-U use] [-D date] -{doz} path
+Rss [-U use] [-D date] [-n] -{doz} path
 </b></dl>
 <p>Shell‑скрипт <i>Rss</i> предназначен для упрощения написания
 анализаторов вывода программ, отслеживания модификаций регулярных файлов,
@@ -69,7 +69,7 @@ Rss [-U use] [-D date] -{doz} path
 	<dt>-l
 	<dd>вывести список активных объектов
 	<dt>-n
-	<dd>инвертировать условие
+	<dd>инвертировать условие или не запрашивать подтверждения
 	<dt>-o
 	<dd>вывести содержимое заданного файла на <i>STDOUT</i>
 	<dt>-r
@@ -92,7 +92,7 @@ Rss [-U use] [-D date] -{doz} path
 	<dt>-x
 	<dd>восстановить ревизии файлов с датой сохранения в качестве расширений
 	<dt>-z
-	<dd>удалить текущую версия файла
+	<dd>удалить текущую версия объекта с запросом подтверждения
 </dl>
 
 <h4>Параметры:</h4>
