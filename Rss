@@ -362,7 +362,7 @@ r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 		elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
 		else Err Failed to access $N
 		fi
-		[ "x$T${I:+ $I}${B:+ $B}" = "x$*" ] && continue
+		[ "$1 $T${I:+ $I}${B:+ $B}" = "$*" ] && continue
 		case $2 in
 		-)	T="regular file";;
 		d)	T="directory";;
