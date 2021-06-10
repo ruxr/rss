@@ -355,7 +355,8 @@ o)	Rss "$1"
 		D=$(Sql "SELECT strftime('%s',d) FROM db WHERE p='$1' AND
 			d<=datetime($RSSD,'unixepoch')
 			ORDER BY rowid DESC LIMIT 1") || exit
-		[ -z "$D" ] || { SQL=; Tmp; Get $1 $D $W/0; /bin/cat $W/0; }
+		[ -z "$D" ] || { SQL=; Tmp; Get $1 $D $W/0
+			[ ! -s $W/0 ] || /bin/cat $W/0; }
 	fi;;
 r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 	SQL=
