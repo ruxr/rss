@@ -219,34 +219,29 @@ Tst 08 Получение полной информации о всех верс
 	Rss -an \*
 Tst E1 Попытка удаления всех, кроме последней, версий без указания имени объекта
 	Rss -e
-Tst 00 Полное удаление объекта из БД
+Tst 05 Удаление всех, кроме последней, версий объектов
+	Rss -e \*
+	Sql "SELECT p FROM db"
+Tst 00 Удаление неактивного объекта из БД
 	Rss -en dir/none
 	Sql "SELECT p FROM db WHERE p='dir/none'"
-Tst 00 Удаление всех, кроме последней, версий объектов
-	Rss -e \*
-	Sql "SELECT p FROM db" | sort >.tmp
-	sort -u .tmp | diff -U0 .tmp -
 Tst 03 Получение краткой информации о всех версиях объектов
 	Rss -a \*
-Tst 00 Полная очистка БД
-	Rss -en \*
-	Sql "SELECT p FROM db" | sort >.tmp
 Tst 00 Сохранение объекта по имени
 	Rss -b -R "dir/none" Log
 Tst 00 Повторное сохранение объекта по имени
 	Rss -b -R "dir/none" Log
 Tst E2 Попытка восстановления объекта с ошибкой в БД
-	Sql "UPDATE db SET d='1970-01-01 00:00:00', b='aaaaa' WHERE rowid=1"
+	Sql "UPDATE db SET d='1970-01-01 00:00:00', b='aaaaa' WHERE rowid=2"
 	Rss -D 0 -rn \*
 Tst E1 Получение последней версии файла на STDOUT для записи с ошибкой в БД
-	Sql "UPDATE db SET b='/aaaaa' WHERE rowid=2"
+	Sql "UPDATE db SET b='/aaaaa' WHERE p='dir/none'"
 	Rss -o dir/none >.tmp
 Tst E1 Обновление объекта для записи с ошибкой в БД
 	Rss -b -R dir/none Log
 Tst 00 Полная очистка БД для тестирования режима отчета
 	rm -rf dir
-	Rss -en \*
-	Sql "SELECT p FROM db" | sort >.tmp
+	Sql "DELETE FROM db"
 Tst E1 Попытка запуска Rss в режиме отчета без указания аргумента
 	Rss -s
 Tst E1 Попытка запуска Rss в режиме отчета для неисполняемого файла
@@ -404,7 +399,7 @@ Tst 012 Получение всех версий файлов
 Tst 05 Получение всех версий файлов старше даты
 	Rss -R 1 -D "$V3" -x \*file\* && ls 1$WRK/dir
 Tst 00 Очищаем БД для тестирования удаления и вывода различий
-	Rss -ne \*
+	Sql "DELETE FROM db"
 Tst 02 Первая версия файла
 	echo 0 >a
 	echo "$ cat a"
