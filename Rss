@@ -337,12 +337,10 @@ e)	[ -n "$RSSN" ] && P= || P="AND rowid NOT IN (SELECT MAX(rowid) FROM db
 	Sql "DELETE FROM db WHERE ($RSS) AND rowid NOT IN (SELECT MAX(rowid)
 	FROM db WHERE $RSS GROUP BY p) $P; DELETE FROM db WHERE i ISNULL AND 
 	rowid IN (SELECT MIN(rowid) FROM db GROUP BY p); VACUUM";;
-i)	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
-	Sql "SELECT datetime(d,'localtime'),t,p,i FROM db WHERE i $I AND
-	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
-l)	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
-	Sql "SELECT p FROM db WHERE i $I AND
-	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
+i|l)	[ $RSSA = i ] && P="datetime(d,'localtime'),t,p,i" || P=p
+	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
+	Sql "SELECT $P FROM db WHERE rowid IN (SELECT MAX(rowid) FROM db
+	WHERE $RSS GROUP BY p) AND i $I ORDER BY p";;
 o)	Rss "$1"
 	if [ -z "$RSSD" ]; then
 		B=$(Sql "SELECT b FROM db WHERE p='$1'
