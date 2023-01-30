@@ -203,8 +203,7 @@ SQL="CREATE TABLE IF NOT EXISTS db (
 	t TEXT NOT NULL,
 	p TEXT NOT NULL,
 	i TEXT,
-	b TEXT);
-"
+	b TEXT);"
 Sql() {
 	/usr/bin/sqlite3 -separator ' ' "$RSSU" "$SQL$*" 2>/dev/null ||
 		Err SQLite3 database access error
@@ -225,9 +224,9 @@ Dir() {
 	esac
 }
 Inf() {
-	if ! I=$(/usr/bin/stat -c '%a %U:%G' $N 2>/dev/null); then T=$1 I=
-	elif [ -L "$N" ]; then T=l I=$I\ $(/bin/readlink "$N") || exit
-	elif [ -d "$N" ]; then T=d
+	if ! I=$(/usr/bin/stat -c '%a %U:%G %s' $N 2>/dev/null); then T=$1 I=
+	elif [ -L "$N" ]; then T=l I=${I% *}\ $(/bin/readlink "$N") || exit
+	elif [ -d "$N" ]; then T=d I=${I% *}
 	elif [ ! -f "$N" ]; then T=$1 I=
 	elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
 	else Err Failed to access $N
@@ -263,7 +262,7 @@ Ask() {
 	esac
 	T="Rss: $1 $T $2"
 	[ -z "$4" ] || T="$T ($(/bin/date --date="@$4" +%F\ %T))"
-	[ -n "$RSSN" ] && echo "$T" && return
+	[ -n "$RSSN" ] && echo "$T" >&2 && return
 	read -p "$T? [y/N]: " T
 	case $T in [yY]);; *) return 1;; esac
 }
@@ -297,9 +296,9 @@ b)	Dir /
 			Sql "INSERT INTO db VALUES($D,'$T','$P',$I,NULL)"
 		else
 			Tmp
-			if [ "x$1" != x- -o -z "$4" ]; then R=
-			elif [ "x$B" = "x$4" ]; then U=NULL
-			else U=\'$(Src "$4" >$W/0 && Cmp "$N" $W/0)\' ||
+			if [ "x$1" != x- -o -z "$5" ]; then R=
+			elif [ "x$B" = "x$5" ]; then U=NULL
+			else U=\'$(Src "$5" >$W/0 && Cmp "$N" $W/0)\' ||
 				Err Failed to extract $P
 			fi
 			echo "INSERT INTO db VALUES($D,'$T','$P',$I,'$B');
@@ -364,7 +363,7 @@ r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 		[ -n "$3" ] || continue
 		N=$RSSR/${P#/} U=$1 B=
 		Inf $2
-		[ "$1 $T${I:+ $I}${B:+ $B}" = "$*" ] && continue
+		[ "$1$T${I:+ $I}${B:+ $B}" = "$*" ] && continue
 		Ask Restore $N $2 || continue
 		/bin/mkdir -p ${N%/*} 2>/dev/null ||
 			Err Failed to create directory ${N%/*}
@@ -394,7 +393,7 @@ x)	Dir
 		AND i NOTNULL ORDER BY p,rowid DESC" >$W/0
 	SQL=
 	exec <$W/0
-	while read P D M O B; do
+	while read P D M O s B; do
 		Dst $P $W/1
 		P=$RSSR/${P#/}.$(/bin/date --date="@$D" +%F+%T)
 		[ -z "$RSSN" ] && I="-m $M -o ${O%:*} -g ${O#*:}" || I=-m$M
@@ -416,7 +415,7 @@ z)	Rss "$1"
 			ORDER BY rowid DESC" >$W/0
 		R2= R3= T2=x T3=x M2= M3= >$W/2 >$W/3
 		exec <$W/0
-		while read R T M O B; do
+		while read R T M O s B; do
 			/bin/ln -f $W/2 $W/1
 			/bin/ln -f $W/3 $W/2
 			R1=$R2 R2=$R3 R3=$R
