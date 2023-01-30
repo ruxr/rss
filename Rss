@@ -224,7 +224,15 @@ Dir() {
 	//) Err Illegal value for option -R
 	esac
 }
-Inf() { /usr/bin/stat -c '%a %U:%G' $1 2>/dev/null; }
+Inf() {
+	if ! I=$(/usr/bin/stat -c '%a %U:%G' $N 2>/dev/null); then T=$1 I=
+	elif [ -L "$N" ]; then T=l I=$I\ $(/bin/readlink "$N") || exit
+	elif [ -d "$N" ]; then T=d
+	elif [ ! -f "$N" ]; then T=$1 I=
+	elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
+	else Err Failed to access $N
+	fi
+}
 Arc() { { /usr/bin/xz -c $1 | /usr/bin/base64 -w0; } 2>/dev/null; }
 Cmp() { { /usr/bin/xdelta3 -s $1 <$2 | /usr/bin/base64 -w0; } 2>/dev/null; }
 Src() { echo $1 | { /usr/bin/base64 -d | /usr/bin/xz -dc; } 2>/dev/null; }
@@ -278,13 +286,7 @@ b)	Dir /
 		set -- $B
 		SQL= R=$1 U=$2 B=
 		[ $# = 0 ] || shift 2
-		if ! I=$(Inf "$N"); then T=$1 I=
-		elif [ -L "$N" ]; then T=l I=$I\ $(/bin/readlink "$N") || exit
-		elif [ -d "$N" ]; then T=d
-		elif [ ! -f "$N" ]; then T=$1 I=
-		elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
-		else Err Failed to access $N
-		fi
+		Inf $1
 		[ "x$T${I:+ $I}${B:+ $B}" = "x$*" ] && continue
 		if [ -n "$RSSD" ]; then
 			[ -z "$U" ] && D=$RSSD || D="MAX($RSSD,$U)"
@@ -295,13 +297,10 @@ b)	Dir /
 			Sql "INSERT INTO db VALUES($D,'$T','$P',$I,NULL)"
 		else
 			Tmp
-			if [ "x$1" != x- -o -z "$4" ]; then
-				R=
-			elif [ "x$B" = "x$4" ]; then
-				U=NULL
-			else
-				U=\'$(Src "$4" >$W/0 && Cmp "$N" $W/0)\' ||
-					Err Failed to ex $P
+			if [ "x$1" != x- -o -z "$4" ]; then R=
+			elif [ "x$B" = "x$4" ]; then U=NULL
+			else U=\'$(Src "$4" >$W/0 && Cmp "$N" $W/0)\' ||
+				Err Failed to extract $P
 			fi
 			echo "INSERT INTO db VALUES($D,'$T','$P',$I,'$B');
 				${R:+UPDATE db SET b=$U WHERE rowid=$R}" >$W/0
@@ -335,7 +334,7 @@ d)	Rss "$1"
 e)	[ -n "$RSSN" ] && P= || P="AND rowid NOT IN (SELECT MAX(rowid) FROM db
 		WHERE ($RSS) AND i NOTNULL GROUP BY p)"
 	Sql "DELETE FROM db WHERE ($RSS) AND rowid NOT IN (SELECT MAX(rowid)
-	FROM db WHERE $RSS GROUP BY p) $P; DELETE FROM db WHERE i ISNULL AND 
+	FROM db WHERE $RSS GROUP BY p) $P; DELETE FROM db WHERE i ISNULL AND
 	rowid IN (SELECT MIN(rowid) FROM db GROUP BY p); VACUUM";;
 i|l)	[ $RSSA = i ] && P="datetime(d,'localtime'),t,p,i" || P=p
 	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
@@ -364,13 +363,7 @@ r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 		set -- $N
 		[ -n "$3" ] || continue
 		N=$RSSR/${P#/} U=$1 B=
-		if ! I=$(Inf "$N"); then T=$2 I=
-		elif [ -L "$N" ]; then T=l I=$I\ $(/bin/readlink $N) || exit
-		elif [ -d "$N" ]; then T=d
-		elif [ ! -f "$N" ]; then T=$2 I=
-		elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
-		else Err Failed to access $N
-		fi
+		Inf $2
 		[ "$1 $T${I:+ $I}${B:+ $B}" = "$*" ] && continue
 		Ask Restore $N $2 || continue
 		/bin/mkdir -p ${N%/*} 2>/dev/null ||
