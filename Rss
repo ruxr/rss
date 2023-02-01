@@ -396,9 +396,8 @@ x)	Dir
 	while read P D M O s B; do
 		Dst $P $W/1
 		P=$RSSR/${P#/}.$(/bin/date --date="@$D" +%F+%T)
-		[ -z "$RSSN" ] && I="-m $M -o ${O%:*} -g ${O#*:}" || I=-m$M
-		/usr/bin/install -Dp $I --backup=numbered $W/1 $P 2>/dev/null ||
-			Err Failed to create $P
+		/usr/bin/install -Dm$M -o${O%:*} -g${O#*:} $W/1 $P \
+			2>/dev/null || Err Failed to create $P
 	done;;
 z)	Rss "$1"
 	[ -z "$RSSD" ] || RSSD="AND d<=datetime($RSSD,'unixepoch')"
