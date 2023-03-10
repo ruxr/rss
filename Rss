@@ -12,7 +12,7 @@ Usage: Rss [-U use] [-R rcpt] -s path [subject]
   or   Rss [-U use] [-D date] [-n] -{doz} path
 
 Options:
-  -a       Show all versions of objects with minimum information
+  -a       Show all versions of objects
   -b       Backup the objects
   -c       Show changed objects since DATE
   -D DATE  Use DATE as timestamp (default: now)
@@ -77,7 +77,7 @@ while getopts D:R:U:abcdehilnorstxz RSS; do
 done
 [ -z "$RSSA" ] && echo "Rss $@" && exit
 shift $(expr $OPTIND - 1)
-[ $# = 0 ] && Err Argument is required
+[ $# = 0 ] && Err Argument required
 [ -n "$RSSU" ] || RSSU=$HOME/.Rss
 case $RSSU in /*);; *) RSSU=$(pwd)/$RSSU;; esac
 trap "Err Terminated by signal" 1 2 3 13 15
@@ -97,13 +97,13 @@ Rss() {
 		elif [ -r "$RSSN" ]; then RSSE=$RSSN
 		else Wrn "Failed to access $RSSN"; break
 		fi
-		[ ! "x$RSSC" = xfalse ] && {
-		$0 -U "$RSSU" -o "$RSSN" >"$RSST/3" || break
-		${RSSC:-/usr/bin/diff -ut} "$RSST/3" "$RSSE"; }
+		[ ! "x$RSSC" = xfalse ] && $0 -U "$RSSU" -o "$RSSN" |
+			${RSSC:-/usr/bin/diff -ut} - "$RSSE"
 		case $? in
 		0);;
-		1) $0 -U "$RSSU" -R "$RSSN" -b "$RSSE";;
-		*) Wrn Comparison exit code: $?
+		1)	/bin/sed -i '2{s/^+++ .*\t/+++ +\t/}' "$RSS"
+			$0 -U "$RSSU" -R "$RSSN" -b "$RSSE";;
+		*)	Wrn Comparison exit code: $?
 		esac
 		[ -s "$RSS" ] || RSS=
 	done
@@ -205,8 +205,11 @@ SQL="CREATE TABLE IF NOT EXISTS db (
 	i TEXT,
 	b TEXT);"
 Sql() {
-	/usr/bin/sqlite3 -separator ' ' "$RSSU" "$SQL$*" 2>/dev/null ||
-		Err SQLite3 database access error
+	case $# in
+	1) /usr/bin/sqlite3 -separator ' ' "$RSSU" "$SQL$1";;
+	*) Q=$(Sql "$2")
+	esac 2>/dev/null || Err SQLite3 database access error
+	SQL=
 }
 Rss() {
 	case /$1/ in
@@ -224,32 +227,35 @@ Dir() {
 	esac
 }
 Inf() {
-	if ! I=$(/usr/bin/stat -c '%a %U:%G %s' $N 2>/dev/null); then T=$1 I=
-	elif [ -L "$N" ]; then T=l I=${I% *}\ $(/bin/readlink "$N") || exit
-	elif [ -d "$N" ]; then T=d I=${I% *}
-	elif [ ! -f "$N" ]; then T=$1 I=
-	elif [ -r "$N" ]; then T=- B=$(Arc "$N") || exit
+	B= T=$1
+	if ! I=$(/usr/bin/stat -c '%a %U:%G %s' $N 2>/dev/null); then I=
+	elif [ -L $N ]; then T=l I=${I% *}\ $(/bin/readlink $N) || exit
+	elif [ -d $N ]; then T=d I=${I% *}
+	elif [ ! -f $N ]; then I=
+	elif [ -r $N ]; then T=-; Arc $N
 	else Err Failed to access $N
 	fi
 }
-Arc() { { /usr/bin/xz -c $1 | /usr/bin/base64 -w0; } 2>/dev/null; }
+Arc() {
+	B=$(/usr/bin/xz -c $1 | /usr/bin/base64 -w0) 2>/dev/null
+	[ -n "$B" ] || Failed to archive $1
+}
 Cmp() { { /usr/bin/xdelta3 -s $1 <$2 | /usr/bin/base64 -w0; } 2>/dev/null; }
-Src() { echo $1 | { /usr/bin/base64 -d | /usr/bin/xz -dc; } 2>/dev/null; }
+Src() { { echo $1 | /usr/bin/base64 -d | /usr/bin/xz -dc; } 2>/dev/null; }
 Dst() {
 	case $B in
 	'');;
 	/*) Src $B >$2;;
-	*) echo $B | { /usr/bin/base64 -d | /usr/bin/xdelta3 -dcs $2 >$2~ &&
+	*) { echo $B | /usr/bin/base64 -d | /usr/bin/xdelta3 -dcs $2 >$2~ &&
 		/bin/mv $2~ $2; } 2>/dev/null
 	esac || Err Failed to extract $1
 }
 Get() {
-	B=$(Sql "SELECT b FROM db WHERE p='$1' AND d>=datetime($2,'unixepoch')
-		AND b NOTNULL ORDER BY rowid DESC") || exit
-	for B in $B; do Dst $1 $3; done
+	Sql Q "SELECT b FROM db WHERE p='$1' AND d>=datetime($2,'unixepoch')
+		AND b NOTNULL ORDER BY rowid DESC"
+	for B in $Q; do Dst $1 $3; done
 }
 Tmp() {
-	[ -n "$W" ] && return
 	W=$(/usr/bin/mktemp -dq) || Err Failed to create temporary directory
 	trap "/bin/rm -r $W" 0
 }
@@ -267,103 +273,98 @@ Ask() {
 	case $T in [yY]);; *) return 1;; esac
 }
 case $RSSA in
-[bdoz])	[ $# = 1 -o "$RSSA$RSSR" = b ] || Err "Only one argument is required";;
+[bdoz])	[ $# = 1 -o "$RSSA$RSSR" = b ] || Err Requires only one argument;;
 *)	RSS=; for P do Rss "$P" pattern; RSS="${RSS:+$RSS OR }p GLOB '$P'"; done
 	[ -z "$RSSD" -o $RSSA = c -o $RSSA = x ] ||
 		RSS="($RSS) AND d<=datetime($RSSD,'unixepoch')"
+	[ $RSSA = l ] && P=p || P="datetime(d,'localtime'),t,p,i"
 esac
 case $RSSA in
-a)	[ -z "$RSSN" ] && T="t,p" || T="t,p,i"
-	Sql "SELECT datetime(d,'localtime'),$T FROM db WHERE $RSS ORDER BY p";;
+a)	Sql "SELECT $P FROM db WHERE $RSS ORDER BY p";;
 b)	Dir /
 	[ -n "$RSSD" ] || D="datetime('now')"
+	Tmp
 	for N do
 		[ -n "$RSSR" ] && P=$RSSR || P=$N
 		Rss "$P"
-		B=$(Sql "SELECT rowid,strftime('%s',d),t,i,b FROM db
-			WHERE p='$P' ORDER BY rowid DESC LIMIT 1") || exit
-		set -- $B
-		SQL= R=$1 U=$2 B=
-		[ $# = 0 ] || shift 2
-		Inf $1
-		[ "x$T${I:+ $I}${B:+ $B}" = "x$*" ] && continue
+		Sql Q "SELECT rowid,strftime('%s',d),t,i,b FROM db
+			WHERE p='$P' ORDER BY rowid DESC LIMIT 1"
+		set -- $Q
+		Inf $3
+		case $3$I in
+		"")	continue;;
+		-?*)	case $6 in 1s*|/T*) b=$6;; *) b=$7;; esac
+			[ "x$T${I% *} $B" = "x-$4 $5 $b" ] && continue;;
+		*)	[ "x$T$I" = "x$3${4:+$4 $5${6:+ $6}}" ] && continue
+		esac
 		if [ -n "$RSSD" ]; then
-			[ -z "$U" ] && D=$RSSD || D="MAX($RSSD,$U)"
+			[ -z "$2" ] && D=$RSSD || D="MAX($RSSD,$2)"
 			D="datetime(MIN(strftime('%s','now'),$D),'unixepoch')"
 		fi
 		[ -z "$I" ] && I=NULL || I=\'$I\'
-		if [ -z "$B" ]; then
-			Sql "INSERT INTO db VALUES($D,'$T','$P',$I,NULL)"
-		else
-			Tmp
-			if [ "x$1" != x- -o -z "$5" ]; then R=
-			elif [ "x$B" = "x$5" ]; then U=NULL
-			else U=\'$(Src "$5" >$W/0 && Cmp "$N" $W/0)\' ||
-				Err Failed to extract $P
-			fi
-			echo "INSERT INTO db VALUES($D,'$T','$P',$I,'$B');
-				${R:+UPDATE db SET b=$U WHERE rowid=$R}" >$W/0
-			Sql ".read $W/0"
+		s="INSERT INTO db VALUES($D,'$T','$P',$I"
+		[ -z "$B" ] && Sql "$s,NULL)" && continue
+		R=$1
+		if [ "x$3" != x- -o -z "$b" ]; then R=
+		elif [ "x$B" = "x$b" ]; then U=NULL
+		else U=\'$(Src $b >$W/0 && Cmp $N $W/0)\' ||
+			Err Failed to extract $P
 		fi
+		echo "$s,'$B'); ${R:+UPDATE db SET b=$U WHERE rowid=$R}" >$W/0
+		Sql ".read $W/0"
 	done;;
 c)	[ -z "$RSSN" ] && I=">=" || I="<"
 	[ -z "$RSSD" ] && D="'now'" || D="$RSSD,'unixepoch'"
-	Sql "SELECT p,t,i FROM db WHERE d $I datetime($D) AND
-	rowid IN (SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
+	Sql "SELECT p,t,i FROM db WHERE d $I datetime($D) AND rowid IN
+		(SELECT MAX(rowid) FROM db WHERE $RSS GROUP BY p) ORDER BY p";;
 d)	Rss "$1"
 	[ -z "$RSSD" ] || RSSD="AND d<=datetime($RSSD,'unixepoch')"
-	N=$(Sql "SELECT rowid,d FROM db WHERE p='$1' AND t='-' AND i NOTNULL
-		$RSSD ORDER BY rowid DESC LIMIT 2") || exit
-	[ -n "$N" ] || Err Failed to get the difference for $1
-	P=$1 SQL=
+	Sql Q "SELECT p,rowid,d FROM db WHERE p='$1' AND t='-' AND i NOTNULL
+		$RSSD ORDER BY rowid DESC LIMIT 2"
+	[ -n "$Q" ] || Err Failed to get the difference for $1
 	Tmp
-	set -- $N
-	Sql "SELECT b FROM db WHERE p='$P' AND t='-' AND b NOTNULL
-		${4:+AND rowid>=$4} ORDER BY rowid DESC" >$W/0
+	set -- $Q
+	Sql "SELECT b FROM db WHERE p='$1' AND t='-' AND b NOTNULL
+		${6:+AND rowid>=$6} ORDER BY rowid DESC" >$W/0
 	>$W/2
 	exec <$W/0
-	while read B; do
-		/bin/ln -f $W/2 $W/1
-		Dst $P $W/2
-	done
-	[ -n "$4" ] && U="$W/2 $W/1" D="$5 $6" ||
-		U="/dev/null $W/2" D="1970-01-01 00:00:00"
-	/usr/bin/diff -u $U |
-		/bin/sed "1{s|.*|--- $P\t$D|};2{s|.*|+++ $P\t$2 $3|}";;
+	while read B; do /bin/ln -f $W/2 $W/1; Dst $1 $W/2; done
+	D="--- $1\t"
+	[ -n "$6" ] && U="$W/2 $W/1" D=$D$7\ $8 ||
+		U="/dev/null $W/2" D=$D"1970-01-01 00:00:00"
+	/usr/bin/diff -u $U | /bin/sed "1{s|.*|$D|};2{s|.*|+++ $1\t$3 $4|}";;
 e)	[ -n "$RSSN" ] && P= || P="AND rowid NOT IN (SELECT MAX(rowid) FROM db
 		WHERE ($RSS) AND i NOTNULL GROUP BY p)"
 	Sql "DELETE FROM db WHERE ($RSS) AND rowid NOT IN (SELECT MAX(rowid)
-	FROM db WHERE $RSS GROUP BY p) $P; DELETE FROM db WHERE i ISNULL AND
-	rowid IN (SELECT MIN(rowid) FROM db GROUP BY p); VACUUM";;
-i|l)	[ $RSSA = i ] && P="datetime(d,'localtime'),t,p,i" || P=p
-	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
+		FROM db WHERE $RSS GROUP BY p) $P; DELETE FROM db WHERE i ISNULL
+		AND rowid IN (SELECT MIN(rowid) FROM db GROUP BY p); VACUUM";;
+i|l)	[ -z "$RSSN" ] && I=NOTNULL || I=ISNULL
 	Sql "SELECT $P FROM db WHERE rowid IN (SELECT MAX(rowid) FROM db
-	WHERE $RSS GROUP BY p) AND i $I ORDER BY p";;
+		WHERE $RSS GROUP BY p) AND i $I ORDER BY p";;
 o)	Rss "$1"
-	if [ -z "$RSSD" ]; then
-		B=$(Sql "SELECT b FROM db WHERE p='$1'
-			ORDER BY rowid DESC LIMIT 1") || exit
-		[ -z "$B" ] || Src $B || Err Failed to extract $1
-	else
-		D=$(Sql "SELECT strftime('%s',d) FROM db WHERE p='$1' AND
-			d<=datetime($RSSD,'unixepoch')
-			ORDER BY rowid DESC LIMIT 1") || exit
-		[ -z "$D" ] || { SQL=; Tmp; Get $1 $D $W/0
+	case $RSSD in
+	"") Sql Q "SELECT b FROM db WHERE p='$1' ORDER BY rowid DESC LIMIT 1"
+		[ -z "$Q" ] || Src $Q || Err Failed to extract $1;;
+	*) Sql Q "SELECT strftime('%s',d) FROM db WHERE p='$1' AND
+		d<=datetime($RSSD,'unixepoch') ORDER BY rowid DESC LIMIT 1"
+		[ -z "$Q" ] || { Tmp; Get $1 $Q $W/0
 			[ ! -s $W/0 ] || /bin/cat $W/0; }
-	fi;;
-r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
-	SQL=
+	esac;;
+r)	Sql Q "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p"
 	Dir
-	for P in $P; do
+	for P in $Q; do
 		Rss "$P"
-		N=$(Sql "SELECT strftime('%s',d),t,i,b FROM db WHERE p='$P'
+		Sql Q "SELECT strftime('%s',d),t,i,b FROM db WHERE p='$P'
 			${RSSD:+AND d<=datetime($RSSD,'unixepoch')}
-			ORDER BY rowid DESC LIMIT 1") || exit
-		set -- $N
+			ORDER BY rowid DESC LIMIT 1"
+		set -- $Q
 		[ -n "$3" ] || continue
-		N=$RSSR/${P#/} U=$1 B=
+		N=$RSSR/${P#/}
 		Inf $2
-		[ "$1$T${I:+ $I}${B:+ $B}" = "$*" ] && continue
+		case $2$6 in
+		-1s*|-/T*) [ "$1 $T ${I% *} $B" = "$*" ] && continue;;
+		-*)	[ "$1 $T${I:+ $I}${B:+ $B}" = "$*" ] && continue
+		esac
 		Ask Restore $N $2 || continue
 		/bin/mkdir -p ${N%/*} 2>/dev/null ||
 			Err Failed to create directory ${N%/*}
@@ -376,24 +377,22 @@ r)	P=$(Sql "SELECT p FROM db WHERE $RSS GROUP BY p ORDER BY p") || exit
 		-)	Get $P $1 $I; /bin/touch -d "@$1" $I;;
 		l)	M=; /bin/ln -sf $5 $I
 		esac
-		[ x$2 = xl ] || /bin/chmod $3 ${I:-$N} 2>/dev/null ||
+		[ x$2 = xl ] || { T=; /bin/chmod $3 ${I:-$N} 2>/dev/null; } ||
 			Err Failed to set $3 mode for $N
-		[ x$2 = xl ] || T=
 		/bin/chown ${T:+-h} $4 ${I:-$N} 2>/dev/null ||
 			Err Failed to set ownership as $4 for $N
-		if [ -n "$I" ]; then
-			/bin/mv -T --backup=numbered $I $N 2>/dev/null &&
-				trap 0 || Err Failed to restore $N
-		fi
+		[ -z "$I" ] || /bin/mv -T --backup=numbered $I $N 2>/dev/null ||
+			Err Failed to restore $N
+		trap 0
 	done;;
 x)	Dir
 	Tmp
 	[ -z "$RSSD" ] || RSS="($RSS) AND d>=datetime($RSSD,'unixepoch')"
 	Sql "SELECT p,strftime('%s',d),i,b FROM db WHERE $RSS AND t='-'
 		AND i NOTNULL ORDER BY p,rowid DESC" >$W/0
-	SQL=
 	exec <$W/0
 	while read P D M O s B; do
+		case $s in 1s*|/T*) B=$s;; esac
 		Dst $P $W/1
 		P=$RSSR/${P#/}.$(/bin/date --date="@$D" +%F+%T)
 		/usr/bin/install -Dm$M -o${O%:*} -g${O#*:} $W/1 $P \
@@ -401,41 +400,37 @@ x)	Dir
 	done;;
 z)	Rss "$1"
 	[ -z "$RSSD" ] || RSSD="AND d<=datetime($RSSD,'unixepoch')"
-	N=$(Sql "SELECT rowid,t,strftime('%s',d) FROM db WHERE p='$1' $RSSD
-		ORDER BY rowid DESC LIMIT 2") || exit
-	[ -n "$N" ] || Err Failed to remove $1
-	P=$1 SQL=
-	set -- $N
-	Ask Delete $P $2 $3 || exit
+	Sql Q "SELECT rowid,p,t,strftime('%s',d) FROM db WHERE p='$1' $RSSD
+		ORDER BY rowid DESC LIMIT 2"
+	[ -n "$Q" ] || Err Failed to remove $1
+	set -- $Q
+	Ask Delete $2 $3 $4 || exit
 	S="DELETE FROM db WHERE rowid=$1; VACUUM"
-	case $2$5 in
+	case $3$7 in
 	[dl-]-) Tmp
-		Sql "SELECT rowid,t,i,b FROM db WHERE p='$P' AND rowid>=$4
+		Sql "SELECT rowid,t,i,b FROM db WHERE p='$2' AND rowid>=$5
 			ORDER BY rowid DESC" >$W/0
-		R2= R3= T2=x T3=x M2= M3= >$W/2 >$W/3
+		a= b= c=x d=x e= f= >$W/2 >$W/3
 		exec <$W/0
 		while read R T M O s B; do
-			/bin/ln -f $W/2 $W/1
-			/bin/ln -f $W/3 $W/2
-			R1=$R2 R2=$R3 R3=$R
-			T1=$T2 T2=$T3 T3=$T
-			M1=$M2 M2=$M3 M3=$M$O
-			[ "x$T" = x- ] && Dst $P $W/3
+			/bin/ln -f $W/2 $W/1; /bin/ln -f $W/3 $W/2
+			r=$a a=$b b=$R t=$c c=$d d=$T m=$e e=$f f=$M$O
+			case $T$s in [!-]*) continue;; -1s*|-/T*) B=$s;; esac
+			[ -n "$B" ] && Dst $2 $W/3
 		done
-		case $T1$T2 in
-		[xdl]-)	B=$(Arc $W/3);;
+		s="UPDATE db SET b"
+		case $t$c in
+		[xdl]-)	Arc $W/3;;
 		-[dl-])	if ! /usr/bin/cmp -s $W/1 $W/3; then
 				B=$(Cmp $W/1 $W/3)
-			elif [ "x$M1" = "x$M3" ]; then
-				SQL="UPDATE db SET b=(SELECT b FROM db
-					WHERE rowid=$R1) WHERE rowid=$R3;
-					DELETE FROM db WHERE rowid=$R1;"
+			elif [ "x$m" = "x$f" ]; then
+				SQL="$s=(SELECT b FROM db WHERE rowid=$r) WHERE
+					rowid=$b; ${S%=*}=$r;"
 			else
-				SQL="UPDATE db SET b=NULL WHERE rowid=$R3";
+				SQL="$s=NULL WHERE rowid=$b;"
 			fi
 		esac
-		[ -z "$SQL" ] &&
-			echo "UPDATE db SET b='$B' WHERE rowid=$R3; $S" >$W/0 &&
+		[ -z "$SQL" ] && echo "$s='$B' WHERE rowid=$b; $S" >$W/0 &&
 			S=".read $W/0"
 	esac
 	Sql "$S"

@@ -1,5 +1,5 @@
 #
-#	@(#) Makefile V1.20.2 (C) 2007-2021 by Roman Oreshnikov
+#	@(#) Makefile V1.23.0 (C) 2007-2023 by Roman Oreshnikov
 #
 BINDIR	= /bin
 JOBDIR	= /etc/cron.d
@@ -23,13 +23,15 @@ SED	= /bin/sed
 TAR	= /bin/tar
 
 BIN	= Rss
+CHK	= Rchk
 DOC	= Rss.ru.html
 JOB	= Rss.cron
+LOG	= Rss.log
 MAN	= Rss.1
-RSS	= Check
+RSS	= rc.Rss
 TST	= Rss.tst
 
-SRC	= $(BIN) $(DOC) $(MAN) $(RSS) $(TST)
+SRC	= $(BIN) $(CHK) $(DOC) $(MAN) $(RSS) $(TST)
 
 .PHONY:	all build check clean dist install uninstall
 
@@ -62,16 +64,16 @@ check:
 
 Rss.cron: Makefile
 	@echo "Build $@"; { \
-	echo "#"; echo "# $(JOBDIR)/Rss: Rss cron jobs"; echo "#"; \
-	echo "4 4 * * * $(BINDIR)/Rss -s" \
-		"$(RSSDIR)/Check Rss report from \`/bin/uname -n\`"; \
+	echo "#"; echo "# $(JOBDIR)/$(BIN): Rss cron jobs"; echo "#"; \
+	echo "4 4 * * * $(BINDIR)/$(BIN) -s" \
+		"$(RSSDIR)/$(RSS) Rss report from \`/bin/uname -n\`"; \
 	} >$@
 
 install: check $(JOB) $(BIN) $(MAN) $(RSS)
 	@echo "Install software"; set -e; \
 	$(INSTALL) -Dm 555 $(BIN) "$(DESTDIR)$(BINDIR)/$(BIN)"; \
 	$(INSTALL) -Dm 755 $(RSS) "$(DESTDIR)$(RSSDIR)/$(RSS)"; \
-	$(INSTALL) -Dm 644 $(JOB) "$(DESTDIR)$(JOBDIR)/Rss"; \
+	$(INSTALL) -Dm 644 $(JOB) "$(DESTDIR)$(JOBDIR)/$(BIN)"; \
 	$(INSTALL) -Dm 644 $(MAN) "$(DESTDIR)$(MANDIR)/$(MAN)"
 
 uninstall: $(JOB) $(BIN) $(MAN) $(RSS)
@@ -89,14 +91,14 @@ uninstall: $(JOB) $(BIN) $(MAN) $(RSS)
 	}; \
 	Uninstall "$(DESTDIR)$(BINDIR)" $(BIN); \
 	Uninstall "$(DESTDIR)$(RSSDIR)" $(RSS); \
-	Uninstall "$(DESTDIR)$(JOBDIR)" Rss; \
+	Uninstall "$(DESTDIR)$(JOBDIR)" $(BIN); \
 	Uninstall "$(DESTDIR)$(MANDIR)" $(MAN)
 
 test:	check
-	@$(RM) -rf tst; $(INSTALL) -D $(BIN) tst/$(BIN); cd tst; sh ../$(TST)
+	@sh $(CHK) -l $(LOG) -r $(BIN) $(TST)
 
 clean:
-	@$(RM) -rf $(JOB) tst
+	@$(RM) -rf $(JOB) $(LOG)
 
 dist: Makefile $(SRC)
 	@set -e; D=`$(SED) '/@(#)/!d;s/^.*V\([^ ]*\).*/Rss-\1/;q' Makefile`; \

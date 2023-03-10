@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# /etc/Check: Rss host checking
+# /etc/rc.Rss: Rss host checking script
 #
 DATE=$(/bin/date "+%d%w")
 #
@@ -108,15 +108,14 @@ DiffShadow() {
 /usr/bin/diff -U0 "$1" "$2" | /bin/sed 's/^\(.[^: ]*:\)[^:]*/\1(password)/;$q 1'
 }
 Rss /etc
-Rss /etc/Check
 Rss /etc/exim/
 Rss /etc/fstab
 Rss /etc/group
 Rss /etc/hosts
 Rss /etc/inetd.conf
-Rss /etc/lilo.conf
 Rss /etc/ntp.conf
 Rss /etc/passwd
+Rss /etc/rc.Rss
 Rss /etc/rc.conf
 Rss /etc/resolv.conf
 Rss /etc/shadow = DiffShadow
