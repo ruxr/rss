@@ -1,7 +1,7 @@
 #!/bin/sh
 DIR="Скрипт автоматизации тестирования ПО
 
-	@(#) Rchk V1.1 (C) 2023 by Roman Oreshnikov
+	@(#) Rchk V1.23 (C) 2023 by Roman Oreshnikov
 
 	Это бесплатное ПО поставляется без каких-либо ГАРАНТИЙ
 
@@ -34,6 +34,7 @@ DIR="Скрипт автоматизации тестирования ПО
 Зарезервированные имена переменных:
   DIR - стартовый каталог
   LOG - файл для записи протокола
+  NUM - номер текущего теста
   REZ - ожидаемый результат завершения этапа
   RUN - программа-реципиент
   TMP - файл сохранения вывода этапа
@@ -83,26 +84,27 @@ Run() {
 	$RUN "$@"
 }
 Tst() {
-	REZ=$REZ=$?
-	[ -n "${REZ%/*}" ] && cat "$TMP" >&4 &&
-		REZ=$REZ:$(cat "$TMP" | wc -l) &&
-		case ${REZ#*/} in
-		${REZ#*=}*) Log "Тест №${REZ%/*} выполнен успешно (${REZ#*/})";;
-		*) End "Тест №${REZ%/*} провален (${REZ#*/})"
+	REZ="$REZ == $?"
+	[ -n "$NUM" ] && cat "$TMP" >&4 && REZ=$REZ:$(cat "$TMP" | wc -l) &&
+		case $REZ in
+		${REZ##* }\ =*) Log "Тест №$NUM выполнен успешно, $REZ";;
+		*) End "Тест №$NUM провален, ${REZ%%=*}!=${REZ##*=}"
 		esac
 	[ $# = 0 ] && End
 	exec >"$TMP" 2>&1
 	echo >&4
 	case $1 in
-	+) Log "$@"; REZ=/;;
-	*) REZ=$((${REZ%/*} + 1))/$1; shift; Log + "${REZ%/*}. $*"
+	+) Log "$@"; NUM= REZ=;;
+	*) NUM=$(($NUM + 1)) REZ=$1; shift; Log + "$NUM. $*"
 	esac
 }
-REZ=/
+NUM=
+REZ=
 exec 3>&1 4>"$LOG"
 trap Tst 0 1 2 3 13 15
 Log + "Тестирование '$RUN' начато:" $(date +%c)
-[ -f "$RUN" ] && case $RUN in /*);; *) RUN=$DIR/$RUN;; esac
+[ -f "$RUN" ] && case $RUN in /*);; *) RUN=$DIR/$RUN;; esac &&
+	[ ! -x "$RUN" ] && RUN="sh $RUN"
 readonly DIR LOG TMP End Log Run Tst
 while [ $# != 0 ]; do
 	[ -f "$1" -a "$1" ] || End "Cценарий тестирования '$1' недоступен"
